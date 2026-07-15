@@ -10,12 +10,25 @@
 import os
 import subprocess
 import sys
+import tempfile
 import textwrap
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
 PKG = Path(__file__).resolve().parents[1]
 SUT = Path(os.environ.get("KN_SUT") or (REPO / "legacy-sut"))
+
+
+class SkipTest(Exception):
+    """건너뜀을 통과와 구분하기 위한 신호 — 조용한 green 금지."""
+
+
+def _skip(reason):
+    try:
+        import pytest
+    except ImportError:
+        raise SkipTest(reason)
+    pytest.skip(reason)
 
 _SUM_W_SNIPPET = textwrap.dedent("""
     import sys
@@ -39,8 +52,7 @@ def _sum_w_under_seed(seed):
 def test_sum_w_is_identical_across_hash_seeds():
     """해시 시드가 달라도 w 총합은 같아야 한다 (수리 전에는 실패한다)."""
     if not SUT.exists():
-        print(f"SKIP: SUT 없음 ({SUT}) — KN_SUT로 지정 가능")
-        return
+        _skip(f"SUT 없음 ({SUT}) — KN_SUT 환경변수로 지정 가능")
     seeds = [0, 1, 2, 3, 12345]
     sums = [_sum_w_under_seed(s) for s in seeds]
     assert len(set(sums)) == 1, f"해시 시드별 sum_w 불일치: {dict(zip(seeds, sums))}"
@@ -58,21 +70,26 @@ def test_injected_types_returns_deterministic_order():
         }
     """
     got = scan._injected_types(src)
-    assert not isinstance(got, (set, frozenset)), f"set 반환은 순회 비결정: {type(got).__name__}"
-    assert list(got) == sorted(got), f"정렬되지 않음: {list(got)}"
+    # 내용까지 단언한다. `list(got) == sorted(got)`만으로는 구현이 문자 그대로
+    # sorted()를 반환하므로 항진명제이고, 정규식이 깨져 []를 내도 통과한다.
+    assert got == ["AlphaDAO", "MidRepository", "ZebraService"], got
 
 
-def test_shared_dependency_uses_shortest_depth_regardless_of_traversal_order(tmp_path=None):
+def test_shared_dependency_uses_shortest_depth_regardless_of_traversal_order():
     """공유 타입은 최단 깊이의 감쇠를 받아야 한다 (BFS 성질).
 
     구조: Controller → AService → SharedDAO,  Controller → SharedDAO (직접)
     SharedDAO는 최단 깊이 1이므로, AService 경유(깊이 2)로 먼저 닿더라도 감쇠 1.0이어야 한다.
+    알파벳순으로 AService < SharedDAO라, DFS에 정렬만 얹은 수리는 이 테스트를 통과하지 못한다.
     """
-    import tempfile
     sys.path.insert(0, str(PKG))
     import scan
 
-    root = Path(tempfile.mkdtemp())
+    with tempfile.TemporaryDirectory() as tmp:   # 예외 경로에서도 정리된다
+        _assert_shortest_depth_decay(scan, Path(tmp))
+
+
+def _assert_shortest_depth_decay(scan, root):
     java = root / "src/main/java/app"
     java.mkdir(parents=True)
     (java / "DemoController.java").write_text(textwrap.dedent("""
@@ -106,7 +123,19 @@ def test_shared_dependency_uses_shortest_depth_regardless_of_traversal_order(tmp
 
 
 if __name__ == "__main__":
+    passed, skipped = 0, 0
     for name, fn in sorted(globals().items()):
-        if name.startswith("test_"):
+        if not name.startswith("test_"):
+            continue
+        try:
             fn()
+        except SkipTest as e:
+            skipped += 1
+            print(f"SKIP {name}: {e}")
+        else:
+            passed += 1
             print(f"PASS {name}")
+    print(f"\n{passed} passed, {skipped} skipped")
+    if skipped:
+        # skip을 green으로 주장하지 않는다 — 결정성 게이트가 조용히 통과되면 안 된다.
+        sys.exit(1)
