@@ -3,18 +3,51 @@ from pathlib import Path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import scan, calibrate, model, plan
 
-ROOT = Path("/home/baek/temp/reduce-token")
-SP = str(ROOT / "smartplant")
+# 경로 해석: ① 환경변수 오버라이드 → ② 저장소 상대 기본값 (이 파일 기준).
+# tests/ → kn_estimator/ → tools/ → 저장소 루트 = parents[3].
+REPO = Path(__file__).resolve().parents[3]
+SUT = Path(os.environ.get("KN_SUT") or REPO / "smartplant")
+LEDGER = Path(os.environ.get("KN_LEDGER") or REPO / "results/run_ledger.jsonl")
+RUNS = Path(os.environ.get("KN_RUNS") or REPO / "results/runs")
+SP = str(SUT)
+
+
+class SkipTest(Exception):
+    """건너뜀을 통과와 구분하기 위한 신호 — 조용한 green 금지.
+
+    `optional=True`는 설계상 선택적인 스모크(외부 샘플)를 뜻한다. 필수 게이트가
+    건너뛰어지면 스위트를 red로 만들지만, 선택 스모크는 그러지 않는다.
+    """
+
+    def __init__(self, reason, optional=False):
+        super().__init__(reason)
+        self.optional = optional
+
+
+def _skip(reason, optional=False):
+    try:
+        import pytest
+    except ImportError:
+        raise SkipTest(reason, optional)
+    pytest.skip(reason)
+
+
+def _require_sut():
+    """SUT(smartplant)는 gitignore 대상이라 부재할 수 있다 — 조용히 통과시키지 않는다."""
+    if not SUT.exists():
+        _skip(f"SUT 없음 ({SUT}) — KN_SUT 환경변수로 지정 가능")
 
 
 # ---- scan -------------------------------------------------------------------
 
 def test_inventory_count_matches_registered():
+    _require_sut()
     eps = scan.inventory(SP)
     assert len(eps) == 167, len(eps)
 
 
 def test_slice_finds_service_dao_and_mybatis_xml():
+    _require_sut()
     eps = scan.inventory(SP)
     mng = next(e for e in eps if e["path"] == "/web/super/admin/mngTerms" and e["method"] == "GET")
     sl = scan.build_slices(SP, [mng])[0]
@@ -28,6 +61,7 @@ def test_slice_finds_service_dao_and_mybatis_xml():
 
 
 def test_controller_tokens_counted_once_per_controller_not_per_ep():
+    _require_sut()
     eps = scan.inventory(SP)
     quota = [e for e in eps if e["controller"] == "QuotaController"]
     assert len(quota) >= 2
@@ -40,7 +74,7 @@ def test_controller_tokens_counted_once_per_controller_not_per_ep():
 # ---- calibrate --------------------------------------------------------------
 
 def _cal():
-    return calibrate.calibrate(ROOT / "results/run_ledger.jsonl", ROOT / "results/runs")
+    return calibrate.calibrate(LEDGER, RUNS)
 
 
 def test_calibration_cells_present_and_versioned():
@@ -63,14 +97,14 @@ def test_uncalibrated_cell_is_flagged():
 # ---- model: hold-out & coverage ---------------------------------------------
 
 def _measured(arm, n):
-    rows = [json.loads(l) for l in (ROOT / "results/run_ledger.jsonl").read_text().splitlines()]
+    rows = [json.loads(l) for l in (LEDGER).read_text().splitlines()]
     return [r["cost_usd"] for r in rows if r["variant"] == arm and r.get("n") == n
             and r["role"] == "run_total" and r.get("rep") in (1, 2, 3)]
 
 
 def test_holdout_fit_partial_predict_rest_flat_opus():
     # N=1 전체 + N=8 rep1로 fit → N=8 예측이 실측 3회 [min,max] 안
-    cal = calibrate.calibrate(ROOT / "results/run_ledger.jsonl", ROOT / "results/runs",
+    cal = calibrate.calibrate(LEDGER, RUNS,
                               include=lambda r: not (r["variant"] == "flat" and r["n"] == 8
                                                      and r["rep"] in (2, 3)))
     est = model.estimate_cell(cal, "flat", "opus", [1.0] * 8)
@@ -97,14 +131,14 @@ def test_loo_prediction_interval_coverage():
                       ("flat_template_sonnet", ("template", "sonnet"))):
         for held in (1, 2, 3):
             cal = calibrate.calibrate(
-                ROOT / "results/run_ledger.jsonl", ROOT / "results/runs",
+                LEDGER, RUNS,
                 include=lambda r, a=arm, h=held: not (r["variant"] == a and r["n"] == 8
                                                       and r["rep"] == h))
             est = model.estimate_cell(cal, cell[0], cell[1], [1.0] * 8)
             if est.get("status"):
                 continue
             actual = [json.loads(l)["cost_usd"] for l in
-                      (ROOT / "results/run_ledger.jsonl").read_text().splitlines()
+                      (LEDGER).read_text().splitlines()
                       if f'"run_id": "{arm}-n8-r{held}"' in l.replace('": "', '": "')
                       and '"run_total"' in l]
             actual = _measured(arm, 8)[held - 1] if not actual else actual[0]
@@ -117,6 +151,7 @@ def test_loo_prediction_interval_coverage():
 # ---- plan --------------------------------------------------------------------
 
 def test_partition_covers_all_and_respects_walls():
+    _require_sut()
     eps = scan.inventory(SP)
     sls = scan.build_slices(SP, eps)
     cal = _cal()
@@ -132,18 +167,36 @@ def test_partition_covers_all_and_respects_walls():
 
 def test_smoke_external_project():
     # graph-rag 샘플: 크래시 없이 N·플랜 산출 (경로 없으면 skip)
-    ext = Path("/tmp/claude-1000/-home-baek-temp-reduce-token/94eecaa1-90e0-4e5b-bd22-407f35601a30/scratchpad/graph-rag/samples/order-service")
+    # 경로는 KN_EXTERNAL_SAMPLE로 지정한다. 기존 하드코딩은 타 세션 스크래치패드를
+    # 가리켜 항상 SKIP됐다 (실효 커버리지 0).
+    ext_env = os.environ.get("KN_EXTERNAL_SAMPLE")
+    if not ext_env:
+        _skip("KN_EXTERNAL_SAMPLE 미지정 — 외부 프로젝트 스모크 생략", optional=True)
+    ext = Path(ext_env)
     if not ext.exists():
-        print("SKIP external"); return
+        _skip(f"외부 샘플 없음 ({ext})", optional=True)
     eps = scan.inventory(str(ext))
     if not eps:
-        print("SKIP external (no endpoints matched)"); return
+        _skip(f"외부 샘플에서 엔드포인트 미검출 ({ext})", optional=True)
     sls = scan.build_slices(str(ext), eps)
     p = plan.build_plan(sls, _cal(), mode="template", mdl="sonnet")
     assert p["n_chunks"] >= 1
 
 
 if __name__ == "__main__":
+    passed, skipped, required_skipped = 0, 0, 0
     for name, fn in sorted(globals().items()):
-        if name.startswith("test_"):
-            fn(); print(f"PASS {name}")
+        if not name.startswith("test_"):
+            continue
+        try:
+            fn()
+        except SkipTest as e:
+            skipped += 1
+            required_skipped += 0 if e.optional else 1
+            print(f"SKIP{'' if e.optional else ' (필수 게이트!)'} {name}: {e}")
+        else:
+            passed += 1
+            print(f"PASS {name}")
+    print(f"\n{passed} passed, {skipped} skipped ({required_skipped} required)")
+    if required_skipped:
+        sys.exit(1)   # 필수 게이트를 건너뛰고 green이라 주장하지 않는다
