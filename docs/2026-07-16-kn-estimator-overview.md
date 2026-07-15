@@ -284,17 +284,12 @@ turns/out/cost를 집계하며, 캘리브레이션은 N=1/N=8의 **집계 2점 �
 | 5 | 런타임 `results/`(23MB 트랜스크립트) 의존 | 본 세션 |
 | 6 | `tools/kn_estimator/tests/test_kn.py:135` 죽은 외부 스모크 경로 — 항상 SKIP | 본 세션 (설계 리뷰) |
 | 7 | `plan.py:7` `import model` → 패키지화 시 `ModuleNotFoundError` | 본 세션 (설계 리뷰) |
+| 8 | `external_call` 플래그가 **구조적으로 항상 False** (결합 아님 — 별도 결함, §6.2-7) | 본 세션 (코드 리뷰) |
 
 결합 6·7의 "설계 리뷰"는 **본 세션에서 실행한 3벤더 리뷰**이며 저장소에 커밋된 산출물이
 아니다(트리아지 문서의 K/P 번호 체계와 무관). 두 결함 자체는 직접 코드 확인으로 검증됐다.
 
-### 5.2 수리됨 — 단, **`main`에는 아직 반영되지 않았다** (브랜치 `feat/standalone-package`, 커밋 `44e62c6`)
-
-> **주의:** 이 수리는 **미병합 브랜치에만 있다.** `main`(HEAD `ed4e688`)을 체크아웃한 사람은
-> 여전히 비결정적 DFS 코드를 손에 쥔다(`git merge-base --is-ancestor 44e62c6 HEAD` → NOT
-> ancestor로 확인). 3벤더 리뷰가 셋 다 이 점을 지적했고, Claude·Cursor 슬롯은 `main`
-> 체크아웃에서 비결정성을 **직접 재현**했다(`sum_w` = 1828656 / 1825368 / 1827012).
-> 병합 전까지 아래 "6/6 바이트 동일"은 **브랜치에서만** 성립한다.
+### 5.2 수리 완료 — 도구가 비결정적이었다 (`main`에 병합됨: `db51bbc`, `52c750b`)
 
 HANDOFF의 알려진 결함 목록에 없던 잠복 결함이다. `_injected_types()`가 set을 반환하는데
 순회 깊이별 감쇠(1.0 vs 0.5)를 적용해서, **공유 DAO의 가중치가 "어느 서비스가 먼저
@@ -346,6 +341,11 @@ HANDOFF의 알려진 결함 목록에 없던 잠복 결함이다. `_injected_typ
    (보수적 방향이나 설계 불일치).
 5. **K4 재분할 루프 부재 + 크래시** — `w_hard` 초과 시 재분할이 아니라 frac을 통째로 버리고,
    모든 frac 실패 시 `plan.py:88`에서 `best is None` → **AttributeError**.
+7. **`external_call`이 구조적으로 도달 불가** — `EXTERNAL_CALL_TYPES`가 `SPRING_INFRA`의
+   부분집합이라 `_injected_types()`가 먼저 걸러낸다. 167 EP 전체에서 `external_call=True`가
+   **0건**(실측). 보고서의 external 열이 항상 비어 있다 — 모듈 독스트링의 "조용한 0 금지"
+   원칙을 그 모듈이 위반한다. 수정 시 보고서 골든 변경(w_tokens는 불변 — 외부 타입은 토큰을
+   더하지 않고 플래그만 세운다).
 6. **K3(3) MyBatis가 네임스페이스가 아니라 디렉토리 prefix 매칭** — 과대 가산 + 패키지 병치가
    아닌 프로젝트에선 미해결.
 
