@@ -48,10 +48,12 @@ class _Index:
 
     def __init__(self, root):
         self.root = Path(root)
+        # glob 순서는 파일시스템 readdir에 의존한다. by_class는 선착순(setdefault)이라
+        # 동일 stem 충돌 시, xmls는 files 순서에 각각 영향을 주므로 정렬로 고정한다.
         self.by_class = {}
-        for f in self.root.glob("src/main/java/**/*.java"):
+        for f in sorted(self.root.glob("src/main/java/**/*.java")):
             self.by_class.setdefault(f.stem, f)
-        self.xmls = list(self.root.glob("src/main/resources/**/*.xml"))
+        self.xmls = sorted(self.root.glob("src/main/resources/**/*.xml"))
 
     def resolve(self, type_name):
         """타입 → 파일. 인터페이스면 *Impl 폴백. (file, is_interface) 또는 None."""
@@ -139,10 +141,11 @@ def build_slices(root, eps):
                         files.append(str(x.relative_to(root)))
                         w_add += int(tokens_of(x) * decay)
                 w += w_add
-                for t in _injected_types(fsrc):
-                    if t not in seen:
-                        seen.add(t)
-                        next_frontier.append(t)
+                if depth < MAX_DEPTH:   # 마지막 깊이의 자식은 어차피 처리되지 않는다
+                    for t in _injected_types(fsrc):
+                        if t not in seen:
+                            seen.add(t)
+                            next_frontier.append(t)
             frontier = next_frontier
 
         out.append({"endpoint": e, "w_tokens": w, "handler_tokens": handler_tok,
