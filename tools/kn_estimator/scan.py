@@ -22,6 +22,8 @@ SPRING_INFRA = {  # 프레임워크 타입은 슬라이스에서 제외
     "Model", "Logger", "MessageSource", "Environment",
 }
 EXTERNAL_CALL_TYPES = {"RestTemplate", "WebClient"}
+MAX_DEPTH = 2               # 주입 그래프 탐색 상한
+DEPTH_DECAY = {1: 1.0, 2: 0.5}  # 최단 깊이별 가중치 감쇠
 
 FIELD_INJ_RE = re.compile(
     r"(?:@Autowired\s+(?:private|protected|public)?\s*|private\s+final\s+)"
@@ -79,10 +81,15 @@ class _Index:
 
 
 def _injected_types(src):
+    """주입 타입을 정렬된 리스트로 반환.
+
+    set을 그대로 돌려주면 순회 순서가 해시 랜덤화에 좌우돼 w_tokens가 실행마다 달라진다.
+    """
     types = set(FIELD_INJ_RE.findall(src))
     for params in CTOR_PARAM_RE.findall(src):
         types.update(TYPE_IN_PARAM_RE.findall(params))
-    return {t for t in types if t not in SPRING_INFRA and not t.startswith(("String", "Long", "Int", "Map", "List"))}
+    return sorted(t for t in types if t not in SPRING_INFRA
+                  and not t.startswith(("String", "Long", "Int", "Map", "List")))
 
 
 def _handler_span_tokens(controller_src, handler):
@@ -106,38 +113,37 @@ def build_slices(root, eps):
         seen = {e["controller"]}
         w = handler_tok
 
-        def visit(type_name, depth):
-            nonlocal w, external
-            if type_name in seen or depth > 2:
-                return
-            seen.add(type_name)
-            if type_name in EXTERNAL_CALL_TYPES:
-                external = True
-                return
-            f = idx.resolve(type_name)
-            if f is None:
-                if type_name.endswith(("Service", "DAO", "Dao", "Mapper", "Repository")):
-                    unresolved.append(type_name)
-                return
-            decay = 1.0 if depth == 1 else 0.5
-            w_add = int(tokens_of(f) * decay)
-            files.append(str(f.relative_to(root)))
-            fsrc = f.read_text(errors="replace")
-            if type_name.endswith(("DAO", "Dao", "Mapper", "Repository")):
-                for x in idx.mybatis_xml_for(f):
-                    files.append(str(x.relative_to(root)))
-                    w_add += int(tokens_of(x) * decay)
-            globals()["_"] = None  # no-op to keep closure simple
-            _accumulate(w_add)
-            for t in _injected_types(fsrc):
-                visit(t, depth + 1)
-
-        def _accumulate(v):
-            nonlocal w
-            w += v
-
-        for t in _injected_types(src):
-            visit(t, 1)
+        # BFS: 감쇠는 엔드포인트로부터의 **최단 깊이**로 결정된다. DFS로 순회하면 공유
+        # 의존 타입이 어느 부모에서 먼저 닿느냐에 따라 감쇠와 하위 탐색 범위가 갈렸다.
+        frontier = [t for t in _injected_types(src) if t not in seen]
+        seen.update(frontier)
+        for depth in range(1, MAX_DEPTH + 1):
+            if not frontier:
+                break
+            decay = DEPTH_DECAY[depth]
+            next_frontier = []
+            for type_name in frontier:
+                if type_name in EXTERNAL_CALL_TYPES:
+                    external = True
+                    continue
+                f = idx.resolve(type_name)
+                if f is None:
+                    if type_name.endswith(("Service", "DAO", "Dao", "Mapper", "Repository")):
+                        unresolved.append(type_name)
+                    continue
+                w_add = int(tokens_of(f) * decay)
+                files.append(str(f.relative_to(root)))
+                fsrc = f.read_text(errors="replace")
+                if type_name.endswith(("DAO", "Dao", "Mapper", "Repository")):
+                    for x in idx.mybatis_xml_for(f):
+                        files.append(str(x.relative_to(root)))
+                        w_add += int(tokens_of(x) * decay)
+                w += w_add
+                for t in _injected_types(fsrc):
+                    if t not in seen:
+                        seen.add(t)
+                        next_frontier.append(t)
+            frontier = next_frontier
 
         out.append({"endpoint": e, "w_tokens": w, "handler_tokens": handler_tok,
                     "controller_shared_tokens": ctrl_tok, "files": files,
