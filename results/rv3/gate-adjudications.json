@@ -1,0 +1,13 @@
+{
+  "_comment": "raw 게이트 실패가 사후 검증에서 측정 인프라 아티팩트로 판명되어 pass로 재판정된 run 목록. 근거: results/2x2-template-model-comparison.md '게이트 재판정 상세' (인벤토리 경로 조인 버그 + no-op SQL 위양성). 산출물 결함으로 인한 실패는 여기 넣지 않는다.",
+  "adjudicated_pass": [
+    "flat_template-n8-r1",
+    "flat_template-n8-r3",
+    "flat_template_sonnet-n8-r1",
+    "flat_template_sonnet-n8-r2",
+    "flat_template_sonnet-n8-r3",
+    "flat_template_haiku-n8-r1",
+    "flat_template_haiku-n8-r2"
+  ],
+  "_haiku_note": "flat_template_haiku r1=경로 별칭 위양성만(manifest 8/8 ok), r2=빈 no-op SQL(인증 실패 경로 전용 엔드포인트, sonnet 케이스와 동일 의미). flat_haiku 3회는 placeholder SQL·엔드포인트 누락의 진짜 품질 실패로 구제하지 않음."
+}

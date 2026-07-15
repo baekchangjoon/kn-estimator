@@ -1,0 +1,105 @@
+## 1. HIGH — 비용 시뮬레이션 식이 미정·이중·실측과 어긋남
+
+**(a) 문제**  
+`reads_i = τ·(C + w_i/2)`, `C += δ_fixed + ρ·w_i`, `cost = P_in·Σw_i + P_cache_read·Σreads_i + P_cache_write·(C_max) + …`가 한 식 체계로 닫히지 않는다. `δ` 단일 중앙값 테이블과 `δ_fixed+ρ·w_i` / `δ_i=δ_cal·(w_i/w̄)^α`가 병존하고, `tests_i`·`ρ`·`P_*`·“신규 read” 정의가 없다.
+
+**(b) 근거**  
+실측 지배항은 cache_read 총량(final-report: 비용의 96~98%). 스케일링 문서는 턴 컨텍스트 누적의 2차항으로 설명한다. 그런데 `P_cache_write·(C_max)`는 청크마다·턴마다의 write 합이 아니라 피크 1회 과금이며, `Σreads_i`에 이미 `w_i/2`를 넣은 뒤 `P_in·Σw_i`를 또 더하면 입력 이중계산 위험이 크다. `out_i = out_base + out_per_test·tests_i`의 `tests_i`는 정적 산출 경로가 없다.
+
+**(c) 수정 제안**  
+파라미터를 **관측 가능량만**으로 축소하라: `(S0, τ, δ̄, out̄)` + 가격표. 세션 비용은 `Σ_t P_cache_read·C_t + P_cache_write·ΔC_write_t + P_out·out`로 transcript와 **동일 집계 정의**로 맞추고, `w_i`는 `δ`/`out`의 multiplicative covariate로만 쓰라. `tests_i`는 버리거나 핸들러 분기/어설션 프록시로 명시하고 fit 대상에 포함하라.
+
+---
+
+## 2. HIGH — α=0.5 이전(transfer)은 미검증이며 δ의 인과와 불일치
+
+**(a) 문제**  
+`δ_i = δ_cal · (w_i / w̄_cal)^α`, `α=0.5`로 타 프로젝트 이전이 가능하다고 가정한다. δ의 주성분은 “읽은 소스 bytes”가 아니라 도구 결과·산출물 잔류다.
+
+**(b) 근거**  
+scaling-analysis: N=8에서 컨텍스트 +16~26K/EP, 종료 178~257K. 이는 SQL/스텁/테스트 초안 등 **생성물 축적**에 가깝다. 캘리브레이션은 SmartPlant 단일 프로젝트라 `w_i≈w̄_cal`이면 α는 항등식이고, 타 프로젝트 hold-out 비용이 없다. α=0.5는 “코드 2배 ≠ 읽기 2배” 서사이지 fit이 아니다. fat service에서 δ를 과소, thin CRUD에서 과대할 수 있다.
+
+**(c) 수정 제안**  
+α를 기본값으로 고정하지 말고, **동일 프로젝트 엔드포인트별로** `(δ_i 또는 EP 기여 cache_read, w_i)` 상관·로그선형 fit 후 α∈[0,1]을 보고하라. 타 프로젝트는 α 이전 전 **δ̄ 재캘리브레이션 런(작은 N)**을 요구하거나, 이전 불가 시 상대 비교만 허용하고 절대 USD에 wide prior를 붙여라. `out`도 동일 power로 묶지 말고 별도 계수로 두라.
+
+---
+
+## 3. HIGH — 1-hop/2-hop 필드 타입→파일명 매칭은 Spring에서 체계적 편향
+
+**(a) 문제**  
+`@Autowired`/생성자 필드 타입의 단순 파일명 매칭 + 2-hop 감쇠 0.5는 DI·MyBatis·Lombok 현실에서 w_i를 크게 틀리게 만든다.
+
+**(b) 근거**  
+인터페이스 주입(`FooService`→`FooServiceImpl`), `@Qualifier`/`@Resource(name=…)`, 생성자 파라미터만 있고 필드 타입이 인터페이스인 경우, Lombok `@RequiredArgsConstructor`의 명시 어노테이션 부재, 상위 클래스 필드, MyBatis는 **인터페이스 FQCN ↔ XML namespace/mapper 파일**이지 “타입명.java”가 아니다. 같은 컨트롤러 파일 tokens를 EP마다 전부 `w_i`에 더하면 다-EP 컨트롤러에서 작업량이 N배 부풀고, 청크 벽·비용·히스토그램이 연쇄 왜곡된다. 한계 절의 “리플렉션·동적 SQL”만으로는 이 구조적 편향을 덮지 못한다.
+
+**(c) 수정 제안**  
+(1) 컨트롤러 **파일은 청크당 1회**만 가산하고 EP에는 핸들러 메서드 span + 호출 심볼만. (2) 타입→구현체는 동일 모듈에서 `*Impl`/컴포넌트 스캔 휴리스틱 + 매칭 실패 시 `unresolved` 플래그와 보수적 prior. (3) MyBatis는 mapper 인터페이스 기준 XML namespace 조인. (4) Lombok은 생성자/필드 선언을 텍스트 패턴으로 인정. (5) w_i precision 목표를 “절대 토큰 ±X%”가 아니라 **순위·분위수**로 낮추고, 슬라이스 재현률을 단위 테스트 수용 기준으로 명시하라.
+
+---
+
+## 4. HIGH — W_eff=150K 기본값이 실측·권장 K와 충돌
+
+**(a) 문제**  
+컨텍스트 벽 `C0 + Σδ_i ≤ 150K`가 기본이면, 캘리브레이션 δ·S0와 결합 시 K*가 비용 최적·문서상 안전 구간(8~12)보다 훨씬 작게 강제된다.
+
+**(b) 근거**  
+flat S0≈52K, δ 중앙≈24K → `(150−52)/24 ≈ 4` EP. 반면 실측 N=8 세션은 종료 178~257K까지 갔고, scaling-analysis의 순수 비용 최적은 `√(a/c)≈11`, 권장 K=8~12다. “자동 컴팩션 트리거 150K”와 “실측은 150K를 넘겨도 게이트 통과”가 동시에 있으면, 기본값 150K는 **품질 정책 상수**인데 soft constraint처럼 비용 그리드를 hard-cut한다. 결과: 청크 수↑ → 고정비 상각 악화 → 총비용 과대·K* 왜곡.
+
+**(c) 수정 제안**  
+벽을 이층으로 분리하라: `W_hard`(모델/러너 상한), `W_soft`(컴팩션·품질 경고). K*는 soft 초과 시 패널티(또는 게이트 실패 확률 prior)를 비용에 더하고 hard만 불가. 기본 `W_soft`는 **실측 N=8 종료 분포**(예: p50/p90)와 캘리브레이션 δ로 back-solve한 값으로 두고, 150K는 “보수 프리셋”으로 CLI에만 남겨라. 보고서에 `K*_cost` vs `K*_wall`을 둘 다 노출하라.
+
+---
+
+## 5. HIGH — ±40% hold-in은 회귀 방지가 아니라 통과 보장에 가깝다
+
+**(a) 문제**  
+계수를 같은 SmartPlant 실측에서 fit한 뒤 flat×opus $10.21 ±40%, template×sonnet $5.63 ±40%, N=1 ±50%를 수용 기준으로 둔다. 설계문이 스스로 “관대한 sanity”라고 인정한다.
+
+**(b) 근거**  
+flat×opus N=8 실측만 6.32/10.21/11.73로 중앙값 대비 이미 ~±38%. LLM 행동 분산 ±30%(설계 §5)와 비슷한 폭이라 **모델이 중앙값에만 맞춰도** 기준을 통과하기 쉽다. hold-in + 다자유도 `(S0,τ,δ,out,α,ρ,sonnet배수)`는 순환이다. 타 프로젝트는 “크래시 없이 N·플랜” 스모크만 있어 **비용 정확도 검증이 없다**. 순서 보존도 template<flat, flat에서 opus<sonnet에 국한 — K 단조·N 외삽은 없다.
+
+**(c) 수정 제안**  
+필수: (1) **N hold-out** — N=1만으로 fit → N=8 예측. (2) **run leave-one-out** 또는 bootstrap으로 구간 커버리지. (3) transcript 턴 시계열에 대한 **Σreads 재구성 RMSE**. (4) 최소 1개 **외부 프로젝트 실측 비용** 또는 “절대 USD 비보증”을 수용 기준에서 공식 제외. ±40%를 쓰려면 “같은 분포 노이즈 대비 모형 잔차”로 재정의하고, 점추정이 아니라 예측구간 커버리지(예: 80% PI가 실측 2/3 이상 포함)를 기준으로 하라.
+
+---
+
+## 6. MEDIUM — K* = 균일 그리드 + greedy bin-packing이 목적함수와 불일치
+
+**(a) 문제**  
+`K=1..K_max`에서 `⌈N/K⌉` 균등 분할 비용을 최소화한다고 하면서, 실제 배정은 컨트롤러 친화 + w_i greedy bin-packing이다. 처리 순서에 민감한 2차 비용을 무시한다.
+
+**(b) 근거**  
+시뮬레이션은 EP 순서로 C가 단조 증가하므로 **같은 집합이라도 순서·이질성에 따라** Σreads가 달라진다. 균일 K 그리드는 “용량 W_eff 아래에서 가변 크기 빈” 문제와 다르다. 컨트롤러 친화 후 w 재균형은 친화를 깨고, 공유 환경분석 상각(scaling §4.1)이 청크 수에 미치는 효과도 식에 없다. 重い EP 한두 개가 빈을 조기 포화시키면 그리드가 고른 K_opt를 골라도 실행 플랜은 더 많은 청크가 된다.
+
+**(c) 수정 제안**  
+최적화 단위를 **청크 집합 파티션**으로 통일하라: 제약 `peak(C)≤W`, 목적 `Σ_chunk Simulate(chunk_order)`. 1단계는 컨트롤러 묶음 후 First-Fit Decreasing by δ̂, 2단계에서만 인접 청크 swap. 그리드의 K는 “목표 평균 크기” 힌트일 뿐 최종 K로 보고하지 말고, 플랜의 `len(chunks)`와 est_cost를 진실원으로 하라. 공유 아티팩트 1회 비용을 `a_shared + n_chunks·a_session`으로 명시하라.
+
+---
+
+## 7. MEDIUM — 캘리브레이션 커버리지: haiku·가격·모드×모델 셀이 설계 CLI와 불일치
+
+**(a) 문제**  
+CLI/보고서는 opus·sonnet·haiku × flat/template 매트릭스를 내지만, 표는 flat/template×opus 중심이고 sonnet은 τ 배수, haiku는 계수 부재다. “13 run fit”도 셀별 표본이 불균등하다.
+
+**(b) 근거**  
+2×2에서 flat×sonnet은 cache_read ~3.8배로 opus보다 비쌌고(중앙 $16.20), template에서는 거의 동률이다. τ×2.4는 그 관찰의 거친 요약이나, δ·out·가격(P_out, cache) 상호작용을 한 배수로 묶으면 행렬의 셀이 틀어지기 쉽다. haiku는 결과가 진행 중/후속인데 매트릭스에 넣으면 **미캘리브레이션 수치를 계획 도구가 확정값처럼** 제시한다. P_in/P_cache_*가 설계에 없어 재현 불가능하다.
+
+**(c) 수정 제안**  
+셀별 `(S0,τ,δ,out)`를 **데이터 있는 셀만** 출력하고, 없는 셀은 `insufficient_calibration`으로 막거나 큰 불확정 구간만 표시. 가격표·캐시 TTL 가정을 calibration.json에 버전과 함께 넣으라. sonnet은 τ만이 아니라 cache_read 총량 배수로 fit하고, flat/template에 따로 두라.
+
+---
+
+## 8. MEDIUM — 누락 리스크: 품질·컴팩션·토크나이저; 대안은 micro-w_i보다 ledger 회귀
+
+**(a) 문제**  
+K* 목적에 품질/컴팩션이 없고, `tokens≈bytes/4`·한글 `/3`은 에이전트가 실제 넣는 컨텍스트와 단위가 다르다. 도구가 “착수 전 실행 계획”을 주장하지만 검증·모델이 상대 비교 수준에 머문다.
+
+**(b) 근거**  
+scaling-analysis §3: 컴팩션=캐시 무효+지침 손실, 긴 세션 후반 품질 저하 — batched N=8 실패가 후반부. final-report 표본 n=3·웜 캐시. 정적 w_i는 LLM이 Read 도구로 가져오는 부분 집합·산출물 토큰을 대체하지 못한다. 다프로젝트 이전 전에 w_i 시뮬을 세부화하면 **가짜 정밀도**가 커진다.
+
+**(c) 수정 제안**  
+단기 대안: ledger+transcript에서 `C(K)≈a+bK+cK²`와 `peak_context(K)`만 fit하고, 정적 분석은 **N·컨트롤러 군집·대략적 복잡도 tertile**에 그쳐 K 후보를 제한하라. 중기: EP 특성(핸들러 LOC, mapper XML 줄수, external call 유무)을 δ 회귀 feature로 넣고 α를 데이터로 결정. K*에 `P(gate_fail|K)` prior(또는 K≤K_quality_cap)를 비용과 가중합으로 넣어라. 토큰은 가능하면 cl100k/모델 tokenizer로 샘플 캘리브하고 bytes/4는 fallback임을 보고에 명시하라.
+
+---
+
+Ask 모드라 설계 수정은 적용하지 않았다. Agent 모드로 전환하면 위 항목을 스펙 패치 초안으로 반영할 수 있다.
