@@ -132,7 +132,7 @@ Spring 컨트롤러를 정규식 스캔해 JSON 응답 핸들러만 채택한다
 
 ### ③ 캘리브레이션
 
-기본값은 저장소 동봉 실측(43 run)에서 자동 생성된다. 자체 실측이 쌓이면:
+기본값은 패키지에 동봉된 사전 산출 캘리브레이션(`data/calibration.json`)이다. 계수에 반영된 run은 18건이다 (flat/opus 6, flat/sonnet 3, template/opus 3, template/sonnet 3, template/haiku 3). 자체 실측이 쌓이면:
 
 ```bash
 kn-calibrate --ledger results/run_ledger.jsonl --runs results/runs --out my-calibration.json
@@ -151,7 +151,6 @@ kn-estimate <root> --calibration my-calibration.json
 ### 4.1 기본 사용
 
 ```bash
-cd experiments/claude-code-token-reduction
 kn-estimate /path/to/your-spring-project \
     --mode template --model sonnet
 # → your-spring-project/.kn/kn-report.md, kn-plan.json
@@ -214,5 +213,5 @@ kn-estimate /path/to/your-spring-project \
 | `plan.py` | 컨트롤러 친화 FFD 파티션 + W_target 그리드 최적화 |
 | `tests/test_kn.py` | 검증 10종 (hold-out, LOO 커버리지, 불변식, 스모크) |
 
-설계 근거와 3벤더 리뷰 반영 내역: `docs/superpowers/specs/2026-07-09-kn-estimator-design.md`,
-`docs/superpowers/reviews/2026-07-09-kn-estimator-review-triage.md`.
+설계 근거와 3벤더 리뷰 반영 내역: `docs/2026-07-09-kn-estimator-design.md`,
+`docs/2026-07-09-kn-estimator-review-triage.md`.

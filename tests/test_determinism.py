@@ -12,22 +12,22 @@ import subprocess
 import sys
 import tempfile
 import textwrap
+import unittest
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 SUT = Path(os.environ.get("KN_SUT") or (REPO / "smartplant"))
 
 
-class SkipTest(Exception):
-    """건너뜀을 통과와 구분하기 위한 신호 — 조용한 green 금지."""
+class SkipTest(unittest.SkipTest):
+    """건너뜀을 통과와 구분하기 위한 신호 — 조용한 green 금지.
+
+    `unittest.SkipTest` 상속이라 pytest가 네이티브 skip으로 보고하고 아래 러너도 잡는다.
+    """
 
 
 def _skip(reason):
-    try:
-        import pytest
-    except ImportError:
-        raise SkipTest(reason)
-    pytest.skip(reason)
+    raise SkipTest(reason)
 
 _SUM_W_SNIPPET = textwrap.dedent("""
     import sys
