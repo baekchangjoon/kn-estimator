@@ -47,23 +47,34 @@ def load_calibration(path=None):
     return cal
 
 
-def _interval_band(cal, mode, mdl, slices):
-    """총액에 곱할 예측구간 비율 (lo, hi).
+def _plan_interval(cal, mode, mdl, slices, p, w_soft):
+    """플랜 총액의 예측구간 (low, high).
 
-    `model.estimate_cell`은 α 민감도(좁은 구간)와 run 분산 밴드(넓은 구간)를 결합한
-    구간을 이미 산출한다. 그러나 단일 청크 가정이라 절대값이 플랜 총액과 다르므로,
-    점추정 대비 **비율**만 가져와 총액에 이식한다.
+    α 민감도는 **선택된 파티션 위에서** 재시뮬레이션해 구한다. `estimate_cell`의 비율을
+    가져다 쓰면 안 된다 — 그건 167개 EP를 한 청크로 보는 가정이라 peak_context가 w_hard를
+    3배 넘는, 플랜이 스스로 거부할 구성이고 비용 구성비도 실제 파티션과 다르다.
 
-    이 구간을 노출하지 않으면 보고서가 센트 단위 점추정만 보여준다 — 실측 run 분산이
-    ±30~46%인데 거짓 정밀도를 주게 된다.
+    거기에 run 분산 밴드(실측 ±30~46%)를 곱한다. 이 구간이 없으면 보고서가 센트 단위
+    점추정만 보여줘 거짓 정밀도를 준다.
     """
-    w_mean = sum(s["w_tokens"] for s in slices) / len(slices)
-    whs = [s["w_tokens"] / w_mean for s in slices]
-    est = model.estimate_cell(cal, mode, mdl, whs)
-    if est.get("status") or not est.get("cost_usd"):
+    if p.get("status") or not p.get("chunks"):
         return None
-    base = est["cost_usd"]
-    return est["pi_low"] / base, est["pi_high"] / base
+    w_mean = sum(s["w_tokens"] for s in slices) / len(slices)
+    totals = {}
+    for alpha in (0.0, 1.0):
+        total = 0.0
+        for c in p["chunks"]:
+            whs = [s["w_tokens"] / w_mean for s in c["endpoints"]]
+            sim = model.simulate_chunk(cal, mode, mdl, whs, alpha=alpha)
+            if sim.get("status"):
+                return None
+            # build_plan과 동일한 누적 규칙 (soft 초과 패널티 포함)
+            total += sim["cost_usd"] * (1.15 if sim["peak_context"] > w_soft else 1.0)
+        totals[alpha] = total
+    base = p["total_cost_usd"]
+    lo_a, hi_a = min(totals.values()), max(totals.values())
+    b_lo, b_hi = model._run_variance_band(cal)
+    return min(lo_a, base) * b_lo, max(hi_a, base) * b_hi
 
 
 def main():
@@ -97,9 +108,7 @@ def main():
         print(f"{p['status']}: {p.get('reason', '')}")
         sys.exit(1)
 
-    # 예측구간: 셀 추정의 상대 밴드를 플랜 총액에 이식한다. estimate_cell은 단일 청크
-    # 가정이라 총액과 절대값이 다르므로, 비율만 가져와 곱한다.
-    band = _interval_band(cal, args.mode, args.model, sls)
+    interval = _plan_interval(cal, args.mode, args.model, sls, p, w_soft)
 
     matrix = {}
     for mode in ("flat", "template"):
@@ -110,6 +119,11 @@ def main():
                 continue
             pm = plan_mod.build_plan(sls, cal, mode=mode, mdl=mdl,
                                      w_hard=args.w_hard, w_soft=w_soft)
+            if pm.get("status"):
+                # 선택 셀이 아니어도 벽을 못 맞추는 셀이 있을 수 있다 (예: 작은 --w-hard에서
+                # flat/sonnet). 크래시 대신 상태를 표기한다.
+                matrix[key] = pm["status"]
+                continue
             matrix[key] = {"total_cost_usd": pm["total_cost_usd"],
                            "n_chunks": pm["n_chunks"], "k_avg": pm["k_avg"],
                            "wall_h": round(pm["total_wall_s"] / 3600, 1)}
@@ -135,9 +149,9 @@ def main():
         f"- 청크 수: **{p['n_chunks']}** (평균 K={p['k_avg']})",
         f"- 예상 총비용: **${p['total_cost_usd']}** / 예상 벽시계: {p['total_wall_s']/3600:.1f}h"
         f" ({'병렬' if args.parallel else '순차'})",
-        (f"- **예측구간: ${p['total_cost_usd']*band[0]:,.0f} ~ ${p['total_cost_usd']*band[1]:,.0f}**"
-         " — α 민감도 × run 분산 밴드. 점추정보다 이 구간으로 해석할 것."
-         if band else "- 예측구간: 산출 불가 (캘리브레이션 부족)"),
+        (f"- **예측구간: ${interval[0]:,.0f} ~ ${interval[1]:,.0f}**"
+         " — 이 파티션의 α 민감도 × 실측 run 분산. 점추정보다 이 구간으로 해석할 것."
+         if interval else "- 예측구간: 산출 불가 (캘리브레이션 부족)"),
         f"- 벽: W_soft={w_soft:,} (품질 정책), W_hard={args.w_hard:,} (모델 상한)",
         f"- soft 초과 청크: {sum(1 for c in p['chunks'] if c['soft_exceeded'])}건", "",
         "## 모드×모델 매트릭스 (동일 플랜 로직)", "",
