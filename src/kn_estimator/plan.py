@@ -85,6 +85,13 @@ def build_plan(slices, cal, mode="template", mdl="sonnet",
             best = {"w_target_frac": frac, "total_cost_usd": round(total, 2),
                     "total_wall_s": int(wall), "n_chunks": len(chunks),
                     "chunks": chunks}
+    if best is None:
+        # 모든 W_target frac에서 어떤 청크의 peak_context가 w_hard를 넘었다. 크래시 대신
+        # 상태를 돌려준다 — 호출자가 벽을 올리거나 모델을 바꿔야 하는 상황이다.
+        return {"status": "infeasible_w_hard", "mode": mode, "model": mdl,
+                "w_hard": w_hard, "w_soft": w_soft,
+                "reason": "모든 W_target 후보에서 청크 peak_context가 w_hard를 초과했다. "
+                          "--w-hard를 올리거나 컨텍스트가 더 큰 모델을 지정하라."}
     best.update({"mode": mode, "model": mdl, "w_hard": w_hard, "w_soft": w_soft,
                  "parallel": parallel,
                  "k_avg": round(len(slices) / best["n_chunks"], 1)})

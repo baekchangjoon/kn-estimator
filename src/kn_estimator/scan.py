@@ -1,8 +1,10 @@
 """정적 스캔: 엔드포인트 인벤토리(N) + 엔드포인트별 작업량 슬라이스(w_i).
 
 설계 v2.2 (리뷰 K3 반영):
-- 컨트롤러 파일 토큰은 controller_shared_tokens로 분리 (청크당 1회 가산),
-  EP 단위 w에는 핸들러 메서드 span만.
+- EP 단위 w에는 핸들러 메서드 span만 (컨트롤러 본체를 EP마다 중복 가산하지 않는다).
+  컨트롤러 본체 토큰은 controller_shared_tokens로 **보고만** 한다 — 비용 모델은 이를
+  가산하지 않는다. 컨트롤러를 읽는 비용은 캘리브레이션 계수(delta_ep/delta_env)에 이미
+  포함돼 있고, 모델에는 절대 토큰 항 자체가 없다 (w는 상대 공변량으로만 쓰인다).
 - 주입 해석: @Autowired 필드 / 생성자 파라미터 / Lombok private final 필드.
 - 인터페이스 타입은 동일 트리 *Impl 폴백.
 - MyBatis: DAO/Mapper가 참조하는 네임스페이스·패키지 병치 XML 조인.
@@ -88,7 +90,11 @@ def _injected_types(src):
     types = set(FIELD_INJ_RE.findall(src))
     for params in CTOR_PARAM_RE.findall(src):
         types.update(TYPE_IN_PARAM_RE.findall(params))
-    return sorted(t for t in types if t not in SPRING_INFRA
+    # 외부 호출 타입은 SPRING_INFRA에도 들어 있지만 여기서 걸러내면 안 된다 — 걸러내면
+    # build_slices의 external_call 분기가 도달 불가가 돼 플래그가 조용히 항상 False가 된다.
+    # 이들은 build_slices에서 플래그만 세우고 토큰은 더하지 않는다.
+    excluded = SPRING_INFRA - EXTERNAL_CALL_TYPES
+    return sorted(t for t in types if t not in excluded
                   and not t.startswith(("String", "Long", "Int", "Map", "List")))
 
 
