@@ -1,4 +1,7 @@
-smartplant/
+smartplant
 __pycache__/
 .kn/
 .codegraph/
+.venv/
+*.egg-info/
+.kn-*/

@@ -14,8 +14,7 @@ import tempfile
 import textwrap
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[3]
-PKG = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[1]
 SUT = Path(os.environ.get("KN_SUT") or (REPO / "smartplant"))
 
 
@@ -32,9 +31,8 @@ def _skip(reason):
 
 _SUM_W_SNIPPET = textwrap.dedent("""
     import sys
-    sys.path.insert(0, sys.argv[1])
-    import scan
-    root = sys.argv[2]
+    from kn_estimator import scan
+    root = sys.argv[1]
     eps = scan.inventory(root)
     sls = scan.build_slices(root, eps)
     print(sum(s["w_tokens"] for s in sls))
@@ -44,7 +42,7 @@ _SUM_W_SNIPPET = textwrap.dedent("""
 def _sum_w_under_seed(seed):
     """별도 프로세스에서 PYTHONHASHSEED를 고정해 sum_w를 구한다."""
     env = {**os.environ, "PYTHONHASHSEED": str(seed)}
-    out = subprocess.run([sys.executable, "-c", _SUM_W_SNIPPET, str(PKG), str(SUT)],
+    out = subprocess.run([sys.executable, "-c", _SUM_W_SNIPPET, str(SUT)],
                          capture_output=True, text=True, env=env, check=True)
     return int(out.stdout.strip())
 
@@ -60,8 +58,7 @@ def test_sum_w_is_identical_across_hash_seeds():
 
 def test_injected_types_returns_deterministic_order():
     """_injected_types는 순서가 고정된 시퀀스를 돌려줘야 한다 (set 금지)."""
-    sys.path.insert(0, str(PKG))
-    import scan
+    from kn_estimator import scan
     src = """
         public class Foo {
             @Autowired private ZebraService zebra;
@@ -82,8 +79,7 @@ def test_shared_dependency_uses_shortest_depth_regardless_of_traversal_order():
     SharedDAO는 최단 깊이 1이므로, AService 경유(깊이 2)로 먼저 닿더라도 감쇠 1.0이어야 한다.
     알파벳순으로 AService < SharedDAO라, DFS에 정렬만 얹은 수리는 이 테스트를 통과하지 못한다.
     """
-    sys.path.insert(0, str(PKG))
-    import scan
+    from kn_estimator import scan
 
     with tempfile.TemporaryDirectory() as tmp:   # 예외 경로에서도 정리된다
         _assert_shortest_depth_decay(scan, Path(tmp))

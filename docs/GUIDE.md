@@ -135,8 +135,8 @@ Spring 컨트롤러를 정규식 스캔해 JSON 응답 핸들러만 채택한다
 기본값은 저장소 동봉 실측(43 run)에서 자동 생성된다. 자체 실측이 쌓이면:
 
 ```bash
-python3 calibrate.py > my-calibration.json     # run_ledger + 트랜스크립트에서 재계산
-python3 estimate.py <root> --calibration my-calibration.json
+kn-calibrate --ledger results/run_ledger.jsonl --runs results/runs --out my-calibration.json
+kn-estimate <root> --calibration my-calibration.json
 ```
 
 ### ④ 플랜·보고서
@@ -152,7 +152,7 @@ python3 estimate.py <root> --calibration my-calibration.json
 
 ```bash
 cd experiments/claude-code-token-reduction
-python3 tools/kn_estimator/estimate.py /path/to/your-spring-project \
+kn-estimate /path/to/your-spring-project \
     --mode template --model sonnet
 # → your-spring-project/.kn/kn-report.md, kn-plan.json
 ```
@@ -186,7 +186,7 @@ python3 tools/kn_estimator/estimate.py /path/to/your-spring-project \
 ### 4.4 새 프로젝트에 정확도를 높이는 절차 (권장 워크플로)
 
 ```
-1) estimate.py로 초기 플랜 산출 (내장 캘리브레이션, 절대값은 참고치)
+1) kn-estimate로 초기 플랜 산출 (내장 캘리브레이션, 절대값은 참고치)
 2) 가장 작은 청크 1개만 실제 실행 (파일럿)
 3) 파일럿의 run_ledger/트랜스크립트로 calibrate.py 재실행 → 프로젝트 자체 계수
 4) --calibration으로 재추정 → 나머지 청크 실행
@@ -207,7 +207,7 @@ python3 tools/kn_estimator/estimate.py /path/to/your-spring-project \
 
 | 파일 | 역할 |
 |---|---|
-| `estimate.py` | CLI 엔트리 — 스캔→캘리브레이션→플랜→보고서 |
+| `cli.py` | CLI 엔트리 (`kn-estimate`) — 스캔→캘리브레이션→플랜→보고서 |
 | `scan.py` | 인벤토리 + 정적 슬라이스 (Spring 관용구 해석) |
 | `calibrate.py` | 실측 원장·트랜스크립트 → 셀별 계수 (env/EP 2점 분해) |
 | `model.py` | 청크 시뮬레이션 + 예측구간 (α 민감도 × run 분산 밴드) |

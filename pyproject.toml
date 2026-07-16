@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kn-estimator"
+version = "0.1.0"
+description = "Spring 프로젝트 정적 스캔 기반 테스트 생성 비용/청크 사전 예측"
+requires-python = ">=3.9"
+dependencies = []          # 표준 라이브러리만 사용한다 (CI에서 수 초 내 동작이 요구사항)
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[project.scripts]
+kn-estimate = "kn_estimator.cli:main"
+kn-calibrate = "kn_estimator.calibrate:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+# 동봉 캘리브레이션이 빠지면 설치본이 동작하지 않는다 — E2E가 설치된 콘솔 스크립트로
+# 이를 검출한다.
+kn_estimator = ["data/*.json"]

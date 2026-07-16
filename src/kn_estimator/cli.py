@@ -9,15 +9,35 @@
 출력: <out-dir>/kn-report.md (사람용), <out-dir>/kn-plan.json (기계용).
 LLM 호출 없음 — 파일 스캔만으로 수 초 내 동작.
 """
-import argparse, json, statistics, sys
+import argparse, json, sys
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-import scan, calibrate as cal_mod, model, plan as plan_mod
+from . import model, plan as plan_mod, scan
 
-DEFAULT_LEDGER = HERE.parent.parent / "results/run_ledger.jsonl"
-DEFAULT_RUNS = HERE.parent.parent / "results/runs"
+HERE = Path(__file__).resolve().parent
+BUNDLED_CALIBRATION = HERE / "data/calibration.json"
+
+
+def load_calibration(path=None):
+    """캘리브레이션 로드 — 기본은 패키지 동봉본.
+
+    시딩 시점에는 실행마다 `results/`(23MB 트랜스크립트)를 읽어 재계산했다. 그 의존이
+    도구를 저장소에 묶었다. 이제 사전 산출본을 동봉하고, 원장은 `kn-calibrate`로
+    오프라인 재생성한다. 부재·파손 시 조용히 폴백하지 않고 재생성 방법을 알린다.
+    """
+    p = Path(path) if path else BUNDLED_CALIBRATION
+    if not p.exists():
+        raise SystemExit(
+            f"캘리브레이션을 찾을 수 없다: {p}\n"
+            "재생성: kn-calibrate --ledger results/run_ledger.jsonl --runs results/runs "
+            f"--out {BUNDLED_CALIBRATION}")
+    try:
+        cal = json.loads(p.read_text())
+    except json.JSONDecodeError as e:
+        raise SystemExit(f"캘리브레이션 파싱 실패: {p}\n{e}")
+    if not cal.get("cells"):
+        raise SystemExit(f"캘리브레이션에 셀이 없다: {p}")
+    return cal
 
 
 def main():
@@ -34,10 +54,7 @@ def main():
     args = ap.parse_args()
     w_soft = 150_000 if args.conservative else args.w_soft
 
-    if args.calibration:
-        cal = json.loads(Path(args.calibration).read_text())
-    else:
-        cal = cal_mod.calibrate(DEFAULT_LEDGER, DEFAULT_RUNS)
+    cal = load_calibration(args.calibration)
 
     eps = scan.inventory(args.project_root)
     if not eps:

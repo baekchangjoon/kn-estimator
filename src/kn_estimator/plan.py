@@ -4,7 +4,7 @@
 → 파티션 전체를 시뮬레이션해 총비용 평가 → W_target 그리드에서 최소 선택.
 벽은 이층: W_hard(모델 상한, 위반 불가) / W_soft(품질 정책, 초과 시 패널티·경고).
 """
-import model
+from . import model
 
 W_HARD_DEFAULT = 900_000     # 1M 윈도우 - 여유분
 W_SOFT_DEFAULT = 180_000     # 실측 flat N=8 종료 분포 p50 역산 (보수 프리셋: 150K)

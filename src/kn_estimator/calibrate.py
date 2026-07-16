@@ -7,7 +7,7 @@
 env/ep 분해는 N이 2종 이상인 셀에서 2점 fit으로, 단일 N 셀은 flat/opus의
 env:ep 비율을 차용(approx 플래그). 가격표·캐시 배수는 버전과 함께 동봉.
 """
-import json, statistics, sys
+import argparse, json, statistics
 from pathlib import Path
 
 ARM_TO_CELL = {"flat": ("flat", "opus"), "flat_sonnet": ("flat", "sonnet"),
@@ -120,7 +120,25 @@ def calibrate(ledger_path, runs_dir, include=None, min_runs=2):
             "alpha_default": 0.5, "cells": cells}
 
 
+def main(argv=None):
+    """원장에서 calibration.json을 재생성한다 — 경로는 인자로 받는다.
+
+    저장소 구조를 추정(구 `parents[2]`)하지 않는다. 그 추정은 디렉토리가 바뀌면 조용히
+    깨졌고, 패키지 설치본에서는 애초에 성립하지 않는다.
+    """
+    ap = argparse.ArgumentParser(description="실측 원장에서 kn-estimator 캘리브레이션 산출")
+    ap.add_argument("--ledger", type=Path, required=True, help="run_ledger.jsonl 경로")
+    ap.add_argument("--runs", type=Path, required=True, help="runs/ 디렉토리 (run_id/transcript.jsonl)")
+    ap.add_argument("--out", type=Path, help="출력 경로 (생략 시 stdout)")
+    args = ap.parse_args(argv)
+    cal = calibrate(args.ledger, args.runs)
+    text = json.dumps(cal, indent=1, ensure_ascii=False)
+    if args.out:
+        args.out.write_text(text)
+        print(f"wrote {args.out} ({len(cal['cells'])} cells)")
+    else:
+        print(text)
+
+
 if __name__ == "__main__":
-    root = Path(__file__).parent.parent.parent
-    cal = calibrate(root / "results/run_ledger.jsonl", root / "results/runs")
-    print(json.dumps(cal, indent=1, ensure_ascii=False))
+    main()
