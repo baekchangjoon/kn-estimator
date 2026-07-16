@@ -47,6 +47,25 @@ def load_calibration(path=None):
     return cal
 
 
+def _interval_band(cal, mode, mdl, slices):
+    """총액에 곱할 예측구간 비율 (lo, hi).
+
+    `model.estimate_cell`은 α 민감도(좁은 구간)와 run 분산 밴드(넓은 구간)를 결합한
+    구간을 이미 산출한다. 그러나 단일 청크 가정이라 절대값이 플랜 총액과 다르므로,
+    점추정 대비 **비율**만 가져와 총액에 이식한다.
+
+    이 구간을 노출하지 않으면 보고서가 센트 단위 점추정만 보여준다 — 실측 run 분산이
+    ±30~46%인데 거짓 정밀도를 주게 된다.
+    """
+    w_mean = sum(s["w_tokens"] for s in slices) / len(slices)
+    whs = [s["w_tokens"] / w_mean for s in slices]
+    est = model.estimate_cell(cal, mode, mdl, whs)
+    if est.get("status") or not est.get("cost_usd"):
+        return None
+    base = est["cost_usd"]
+    return est["pi_low"] / base, est["pi_high"] / base
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("project_root")
@@ -74,6 +93,13 @@ def main():
 
     p = plan_mod.build_plan(sls, cal, mode=args.mode, mdl=args.model,
                             w_hard=args.w_hard, w_soft=w_soft, parallel=args.parallel)
+    if p.get("status"):
+        print(f"{p['status']}: {p.get('reason', '')}")
+        sys.exit(1)
+
+    # 예측구간: 셀 추정의 상대 밴드를 플랜 총액에 이식한다. estimate_cell은 단일 청크
+    # 가정이라 총액과 절대값이 다르므로, 비율만 가져와 곱한다.
+    band = _interval_band(cal, args.mode, args.model, sls)
 
     matrix = {}
     for mode in ("flat", "template"):
@@ -109,6 +135,9 @@ def main():
         f"- 청크 수: **{p['n_chunks']}** (평균 K={p['k_avg']})",
         f"- 예상 총비용: **${p['total_cost_usd']}** / 예상 벽시계: {p['total_wall_s']/3600:.1f}h"
         f" ({'병렬' if args.parallel else '순차'})",
+        (f"- **예측구간: ${p['total_cost_usd']*band[0]:,.0f} ~ ${p['total_cost_usd']*band[1]:,.0f}**"
+         " — α 민감도 × run 분산 밴드. 점추정보다 이 구간으로 해석할 것."
+         if band else "- 예측구간: 산출 불가 (캘리브레이션 부족)"),
         f"- 벽: W_soft={w_soft:,} (품질 정책), W_hard={args.w_hard:,} (모델 상한)",
         f"- soft 초과 청크: {sum(1 for c in p['chunks'] if c['soft_exceeded'])}건", "",
         "## 모드×모델 매트릭스 (동일 플랜 로직)", "",
@@ -118,7 +147,8 @@ def main():
             lines.append(f"| {key} | {v} | — | — | — |")
         else:
             lines.append(f"| {key} | ${v['total_cost_usd']} | {v['n_chunks']} | {v['k_avg']} | {v['wall_h']}h |")
-    lines += ["", "## 복잡도 상위 10 엔드포인트", "",
+    lines += ["", "## 슬라이스 크기 상위 10 엔드포인트", "",
+              "> w는 **코드 크기**(bytes/4)다 — 분기 수 등 복잡도는 반영하지 않는다.", "",
               "| Endpoint | w (tokens) | external | unresolved |", "|---|---|---|---|"]
     for s in top:
         e = s["endpoint"]
@@ -126,6 +156,10 @@ def main():
                      f"| {'Y' if s['external_call'] else ''} | {', '.join(s['unresolved'])} |")
     lines += ["", "## 한계 고지", "",
               "- 캘리브레이션 셀별 실측 run 분산(±30~46%)이 예측 하한 오차 — 구간으로 해석할 것.",
+              "- **작업량 w는 코드 크기만 반영하고 복잡도(분기 수·순환복잡도)는 미반영.** 같은"
+              " 크기라도 분기가 많은 핸들러는 테스트가 더 필요하나 동일하게 취급된다.",
+              "- w는 상대 공변량으로만 쓰인다 — 절대 비용 수준은 전적으로 캘리브레이션 계수에서"
+              " 온다 (w를 일괄 배수해도 결과는 불변).",
               "- 정적 슬라이스는 리플렉션·동적 라우팅·설정 기반 빈을 과소평가할 수 있음.",
               f"- 캘리브레이션 버전: {cal['version']} (N=8 관측 기반 — 대규모 N 외삽 미검증).",
               "- 미캘리브레이션 셀은 insufficient_calibration으로 표기 (추정치 미제공)."]
