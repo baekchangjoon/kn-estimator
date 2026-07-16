@@ -123,9 +123,9 @@ data/calibration.json ──load──> cal ────────────
 |---|---|---|
 | E2E-1 | 인벤토리 = 167 EP | `scan.inventory(SUT)` 길이 |
 | E2E-2 | 캘리브레이션 5셀 (`flat/opus`, `flat/sonnet`, `template/opus`, `template/sonnet`, `template/haiku`), `flat/haiku` 부재 | 동봉 JSON `cells` 키 집합 |
-| E2E-3 | `kn-estimate smartplant --mode template --model sonnet` → `N=167 chunks=60 k_avg=2.8 est=$143.91` | 파싱된 수치 비교 |
-| E2E-4 | `kn-plan.json` sha256 = `db19bcf9e5a22d35bfb20e996c3fec1fffdbdf592ac7838329deda3b73d4ac28` | 바이트 비교 |
-| E2E-5 | `kn-report.md` sha256 = `f8e332f266b90b9b078dac9ad9568fcace552cc2cd910814ccc8c21ec8a54203` | 바이트 비교 (B단계에서 예측구간·라벨·고지 추가로 갱신; `kn-plan.json`은 불변) |
+| E2E-3 | `kn-estimate smartplant --mode template --model sonnet` → `N=167 chunks=61 k_avg=2.7 est=$145.05` (B단계 K3(3) 반영 후) | 파싱된 수치 비교 |
+| E2E-4 | `kn-plan.json` sha256 = `fa5596936e81f776eeadde1e3cdd80832cc7433b88fdc76e6d24dc6c06843910` | 바이트 비교 |
+| E2E-5 | `kn-report.md` sha256 = `12634bf3f92ec348b288a449f6fa7aa10e72d8587af17478caf42a643de51a44` | 바이트 비교 |
 | E2E-6 | 기존 단위 테스트(hold-out, LOO 커버리지, 순서 보존, 파티션 불변식) 전량 green | pytest |
 | E2E-7 | 해시 시드 5종에서 `sum_w` 동일 (결정성 회귀) | `tests/test_determinism.py` |
 

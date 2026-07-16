@@ -51,11 +51,14 @@ def test_build_plan_reports_infeasible_instead_of_crashing():
 
 
 def test_build_plan_still_works_at_realistic_walls():
-    """정상 경로는 그대로여야 한다 (위 수정이 회귀를 만들지 않았는지)."""
+    """정상 경로는 그대로여야 한다 (K4 수정이 회귀를 만들지 않았는지).
+
+    n_chunks=61은 K3(3) 네임스페이스 조인 이후 기준선이다 (그 전엔 60).
+    """
     _require_sut()
     sls = scan.build_slices(str(SUT), scan.inventory(str(SUT)))
     got = plan.build_plan(sls, _cal(), mode="template", mdl="sonnet")
-    assert got["n_chunks"] == 60, got["n_chunks"]
+    assert got["n_chunks"] == 61, got["n_chunks"]
     assert got["total_cost_usd"] > 0
 
 
@@ -117,6 +120,43 @@ def test_external_call_adds_no_dependency_tokens():
         sl = scan.build_slices(str(root), scan.inventory(str(root)))[0]
         assert sl["external_call"] is True, sl
         assert sl["w_tokens"] == sl["handler_tokens"], (sl["w_tokens"], sl["handler_tokens"])
+
+
+# ---- K3(3): MyBatis 네임스페이스 조인 ----------------------------------------
+
+def test_mybatis_joins_by_namespace_not_only_by_directory():
+    """XML이 DAO와 패키지 병치가 아니어도 네임스페이스로 찾아야 한다.
+
+    현재는 디렉토리 prefix 매칭만 해서, XML을 공용 디렉토리에 모아두는 프로젝트에서는
+    아무것도 못 찾는다. SmartPlant는 병치라 우연히 동작할 뿐이다.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        java = root / "src/main/java/app/dao"
+        java.mkdir(parents=True)
+        # XML은 DAO 패키지와 **다른** 경로에 둔다 (병치 아님)
+        xml = root / "src/main/resources/sqlmap"
+        xml.mkdir(parents=True)
+        (java / "OrderDAO.java").write_text(textwrap.dedent("""
+            package app.dao;
+            public class OrderDAO {
+                public Object find(Object p) { return selectOne("orderNs.find", p); }
+            }
+        """))
+        (xml / "order-sql.xml").write_text(
+            '<mapper namespace="orderNs">\n' + "  <!-- pad -->\n" * 100 + "</mapper>\n")
+        idx = scan._Index(root)
+        got = [p.name for p in idx.mybatis_xml_for(java / "OrderDAO.java")]
+        assert "order-sql.xml" in got, got
+
+
+def test_mybatis_namespace_join_still_finds_smartplant_colocated_xml():
+    """레거시 병치 프로젝트(SmartPlant)에서 기존 결과를 잃지 않아야 한다."""
+    _require_sut()
+    eps = scan.inventory(str(SUT))
+    mng = next(e for e in eps if e["path"] == "/web/super/admin/mngTerms" and e["method"] == "GET")
+    sl = scan.build_slices(str(SUT), [mng])[0]
+    assert any(f.endswith("mngTerms.xml") for f in sl["files"]), sl["files"]
 
 
 # ---- K2(a) / C3 / C5: 보고서 정직성 -----------------------------------------
