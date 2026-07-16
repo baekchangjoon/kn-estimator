@@ -166,6 +166,25 @@ def test_partition_covers_all_and_respects_walls():
     assert p["total_cost_usd"] > 0
 
 
+def test_cost_is_scale_invariant_in_w():
+    """w_i를 일괄 배수해도 비용·청크가 변하지 않아야 한다.
+
+    w는 `w_i / w_mean` 비율로만 모델에 들어가므로(plan.py) 절대 크기는 의미가 없다. 절대
+    비용은 전부 캘리브레이션 계수에서 온다. 이 불변식을 고정해두는 이유: 이것을 모르면
+    "어떤 토큰이 w에 안 더해졌으니 비용이 과소추정된다"는 잘못된 결론에 이르기 쉽다.
+    실제로 그런 오판이 한 번 있었다 (docs/2026-07-16-kn-estimator-overview.md §6.2.1).
+    """
+    _require_sut()
+    cal = _cal()
+    sls = scan.build_slices(SP, scan.inventory(SP))
+    base = plan.build_plan(sls, cal, mode="template", mdl="sonnet")
+    for factor in (2, 10):
+        scaled = [{**s, "w_tokens": s["w_tokens"] * factor} for s in sls]
+        got = plan.build_plan(scaled, cal, mode="template", mdl="sonnet")
+        assert got["total_cost_usd"] == base["total_cost_usd"], (factor, got["total_cost_usd"])
+        assert got["n_chunks"] == base["n_chunks"], (factor, got["n_chunks"])
+
+
 def test_smoke_external_project():
     # graph-rag 샘플: 크래시 없이 N·플랜 산출 (경로 없으면 skip)
     # 경로는 KN_EXTERNAL_SAMPLE로 지정한다. 기존 하드코딩은 타 세션 스크래치패드를
