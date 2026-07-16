@@ -125,7 +125,7 @@ data/calibration.json ──load──> cal ────────────
 | E2E-2 | 캘리브레이션 5셀 (`flat/opus`, `flat/sonnet`, `template/opus`, `template/sonnet`, `template/haiku`), `flat/haiku` 부재 | 동봉 JSON `cells` 키 집합 |
 | E2E-3 | `kn-estimate smartplant --mode template --model sonnet` → `N=167 chunks=61 k_avg=2.7 est=$145.05` (B단계 K3(3) 반영 후) | 파싱된 수치 비교 |
 | E2E-4 | `kn-plan.json` sha256 = `fa5596936e81f776eeadde1e3cdd80832cc7433b88fdc76e6d24dc6c06843910` | 바이트 비교 |
-| E2E-5 | `kn-report.md` sha256 = `12634bf3f92ec348b288a449f6fa7aa10e72d8587af17478caf42a643de51a44` | 바이트 비교 |
+| E2E-5 | `kn-report.md` sha256 = `20fa2f9abcba956ee9e7e254cb437ec5512fd531048351947dbfaebc2833bd88` | 바이트 비교 |
 | E2E-6 | 기존 단위 테스트(hold-out, LOO 커버리지, 순서 보존, 파티션 불변식) 전량 green | pytest |
 | E2E-7 | 해시 시드 5종에서 `sum_w` 동일 (결정성 회귀) | `tests/test_determinism.py` |
 

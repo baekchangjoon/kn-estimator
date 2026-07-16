@@ -7,6 +7,7 @@
 - C3/C5: 보고서가 크기 순위를 "복잡도"라 라벨하고, 복잡도 미반영을 고지하지 않는다.
 """
 import json
+import re
 import os
 import subprocess
 import sys
@@ -171,9 +172,52 @@ def _report():
 
 
 def test_report_shows_a_prediction_interval_not_only_a_point_estimate():
-    """run 분산이 ±30~46%인데 점추정만 보이면 거짓 정밀도다."""
+    """run 분산이 ±30~46%인데 점추정만 보이면 거짓 정밀도다.
+
+    "예측구간" 문자열만 단언하면 항진명제다 — 산출 실패 분기에도 그 단어가 들어 있어
+    구간이 사라져도 통과한다. 실제 달러 범위와 그것이 점추정을 감싸는지를 본다.
+    """
     txt = _report()
-    assert "예측구간" in txt, "보고서에 예측구간이 없다"
+    m = re.search(r"예측구간: \$([\d,]+) ~ \$([\d,]+)", txt)
+    assert m, f"달러 범위가 없다:\n{txt[:400]}"
+    lo, hi = (int(g.replace(",", "")) for g in m.groups())
+    point = int(float(re.search(r"예상 총비용: \*\*\$([\d.]+)\*\*", txt).group(1)))
+    assert lo < point < hi, (lo, point, hi)
+    assert hi > lo * 1.3, f"구간이 실측 run 분산(±30~46%)보다 좁다: {lo}~{hi}"
+
+
+def test_plan_interval_is_computed_on_the_actual_partition():
+    """구간은 선택된 파티션에서 재시뮬레이션해야 한다.
+
+    167개를 한 청크로 보는 estimate_cell 비율을 이식하면, peak_context가 w_hard를 3배
+    넘는 — 플랜이 스스로 거부할 — 구성의 α 민감도를 쓰게 된다.
+    """
+    _require_sut()
+    cal, sls = _cal(), scan.build_slices(str(SUT), scan.inventory(str(SUT)))
+    p = plan.build_plan(sls, cal, mode="template", mdl="sonnet")
+    lo, hi = cli._plan_interval(cal, "template", "sonnet", sls, p, plan.W_SOFT_DEFAULT)
+    assert lo < p["total_cost_usd"] < hi, (lo, p["total_cost_usd"], hi)
+    # 단일 mega-chunk 이식본보다 좁아야 한다 (그 쪽이 α 민감도를 과장한다)
+    w_mean = sum(s["w_tokens"] for s in sls) / len(sls)
+    est = model.estimate_cell(cal, "template", "sonnet", [s["w_tokens"] / w_mean for s in sls])
+    transplanted_hi = p["total_cost_usd"] * est["pi_high"] / est["cost_usd"]
+    assert hi < transplanted_hi, (hi, transplanted_hi)
+
+
+def test_matrix_does_not_crash_when_some_cell_is_infeasible():
+    """선택 셀은 되는데 다른 셀이 벽을 못 맞추는 경우 (예: 128K 모델 모델링).
+
+    K4 수정이 선택 셀만 다루면 매트릭스 루프에서 KeyError로 크래시가 옮겨간다.
+    """
+    _require_sut()
+    with tempfile.TemporaryDirectory() as tmp:
+        r = subprocess.run([sys.executable, "-m", "kn_estimator.cli", str(SUT),
+                            "--mode", "template", "--model", "sonnet",
+                            "--w-hard", "200000", "--out-dir", tmp],
+                           capture_output=True, text=True, cwd=REPO)
+        assert r.returncode == 0, f"크래시:\n{r.stderr[-600:]}"
+        txt = (Path(tmp) / "kn-report.md").read_text()
+        assert "infeasible_w_hard" in txt, "벽을 못 맞춘 셀이 표기되지 않았다"
 
 
 def test_report_does_not_call_size_ranking_complexity():
