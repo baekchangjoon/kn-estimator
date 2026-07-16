@@ -30,6 +30,12 @@ FIELD_INJ_RE = re.compile(
     r"([A-Z]\w+)(?:<[^>]*>)?\s+\w+\s*;")
 CTOR_PARAM_RE = re.compile(r"public\s+\w+\s*\(([^)]*)\)\s*\{")
 TYPE_IN_PARAM_RE = re.compile(r"([A-Z]\w+)(?:<[^>]*>)?\s+\w+")
+MAPPER_NS_RE = re.compile(r'<mapper\s+namespace\s*=\s*"([^"]+)"')
+# DAO가 참조하는 statement ID의 네임스페이스. 두 관용구를 모두 잡는다:
+#   레거시 sqlSession: selectOne("mngTerms.getFoo", p)  → "mngTerms"
+#   MyBatis mapper 인터페이스: namespace가 FQCN         → 아래 _namespaces_of가 별도 처리
+STATEMENT_ID_RE = re.compile(r'"([\w.]+)\.\w+"')
+PACKAGE_RE = re.compile(r"package\s+([\w.]+)\s*;")
 
 
 def tokens_of(path):
@@ -54,6 +60,12 @@ class _Index:
         for f in sorted(self.root.glob("src/main/java/**/*.java")):
             self.by_class.setdefault(f.stem, f)
         self.xmls = sorted(self.root.glob("src/main/resources/**/*.xml"))
+        # namespace → XML 파일들. 병치가 아닌 프로젝트에서도 조인하기 위해 필요하다.
+        self.xml_by_namespace = {}
+        for x in self.xmls:
+            m = MAPPER_NS_RE.search(x.read_text(errors="replace"))
+            if m:
+                self.xml_by_namespace.setdefault(m.group(1), []).append(x)
 
     def resolve(self, type_name):
         """타입 → 파일. 인터페이스면 *Impl 폴백. (file, is_interface) 또는 None."""
@@ -68,10 +80,34 @@ class _Index:
         return f
 
     def mybatis_xml_for(self, java_file):
-        """DAO/Mapper 파일의 패키지 병치 XML + 네임스페이스 일치 XML."""
+        """DAO/Mapper의 SQL XML — 네임스페이스 조인 우선, 패키지 병치 폴백.
+
+        네임스페이스 조인은 XML을 공용 디렉토리에 모아두는 프로젝트를 지원한다. 두 관용구를
+        모두 다룬다 — 레거시 sqlSession(`selectOne("ns.stmt")`처럼 statement ID 접두어가
+        네임스페이스)과 mapper 인터페이스(네임스페이스가 FQCN). LegacySut는 전자다.
+
+        네임스페이스로 아무것도 못 찾으면 기존 디렉토리 prefix 매칭으로 폴백한다 — 문자열
+        상수가 아니라 다른 방식으로 SQL을 참조하는 코드가 있을 수 있다.
+        """
+        by_ns = []
+        for ns in self._namespaces_of(java_file):
+            by_ns.extend(self.xml_by_namespace.get(ns, []))
+        if by_ns:
+            return sorted(set(by_ns))
+        return self._colocated_xml_for(java_file)
+
+    def _namespaces_of(self, java_file):
+        """이 DAO/Mapper가 참조하는 네임스페이스 후보."""
+        src = java_file.read_text(errors="replace")
+        out = set(STATEMENT_ID_RE.findall(src))          # 레거시: "ns.stmt" 접두어
+        pkg = PACKAGE_RE.search(src)
+        if pkg:
+            out.add(f"{pkg.group(1)}.{java_file.stem}")  # mapper 인터페이스: FQCN
+        return out
+
+    def _colocated_xml_for(self, java_file):
         out = []
-        pkg_dir = java_file.parent
-        rel = pkg_dir.relative_to(self.root / "src/main/java").parent  # dao/ 상위 모듈 디렉토리
+        rel = java_file.parent.relative_to(self.root / "src/main/java").parent
         for x in self.xmls:
             try:
                 xrel = x.relative_to(self.root / "src/main/resources")
