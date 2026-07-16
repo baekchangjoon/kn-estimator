@@ -18,8 +18,10 @@ N(엔드포인트 수)·w_i(EP별 작업량)·청크 플랜(FFD)·예상 비용/
 # 인벤토리: 167 EP (테스트 기대값과 일치)
 # 캘리브레이션: 5셀 {flat/opus:6, flat/sonnet:3, template/opus:3, template/sonnet:3, template/haiku:3}
 #   (flat/haiku는 세션1 당시에도 전 run 게이트 fail → insufficient_calibration이 정상)
-python3.12 tools/kn_estimator/estimate.py smartplant --mode template --model sonnet
-# → N=167 chunks=60 k_avg=2.8 est=$143.9, smartplant/.kn/{kn-report.md,kn-plan.json}
+python3.12 -m venv .venv && .venv/bin/pip install -e .
+.venv/bin/kn-estimate smartplant --mode template --model sonnet
+# → N=167 chunks=60 k_avg=2.8 est=$143.91, smartplant/.kn/{kn-report.md,kn-plan.json}
+# (est는 $143.9가 아니라 $143.91 — 결정성 수리 전 도구가 두 값 사이를 진동했다. 아래 §3 참조)
 ```
 
 | 자산 | 위치 | 유래 |
@@ -30,26 +32,34 @@ python3.12 tools/kn_estimator/estimate.py smartplant --mode template --model son
 | 보조 데이터 | `results/rv3/` | rv3 원장 + flat/template r41 트랜스크립트 (재캘리브레이션 실험용) |
 | SUT | `smartplant/` (gitignore) | 7e21b18 핀, 전용 클론 — rv4 워크스페이스와 경합 없음 |
 
-## 3. 알려진 결함 (분리 작업에서 반드시 처리)
+## 3. 알려진 결함 — **전부 처리 완료** (2026-07-16)
 
-1. **`tests/test_kn.py:6` 하드코딩 경로** `/home/baek/temp/reduce-token` — 저장소 상대 + env
+> 아래 1~4는 모두 해소됐다. 추가로 **HANDOFF에 없던 잠복 결함**을 발견·수리했다: `scan.py`가
+> 주입 타입을 set으로 순회하면서 깊이별 감쇠를 적용해 **공유 의존의 가중치가 방문 순서로
+> 갈렸다** — 해시 랜덤화 탓에 실행마다 `sum_w`가 0.4% 폭으로 흔들렸고, 그래서 §4의 "동일 수치"
+> 검증이 원리적으로 성립하지 않았다. BFS+정렬로 수리(`db51bbc`). 상세는
+> `docs/2026-07-16-kn-estimator-overview.md` §5.2.
+
+1. ~~**`tests/test_kn.py:6` 하드코딩 경로**~~ `/home/baek/temp/reduce-token` — 저장소 상대 + env
    오버라이드로 교체 (rv4 워크스페이스에서 같은 부류 3건을 `RT_SUT_WS`/`RT_ENDPOINTS` 패턴으로
    수리한 전례 있음). 이 수리 전에는 테스트가 전부 깨진다.
-2. **harness 결합**: `scan.py:15-16`이 `sys.path` 조작으로 `harness/endpoints.py` import —
+2. ~~**harness 결합**~~: `scan.py:15-16`이 `sys.path` 조작으로 `harness/endpoints.py` import —
    패키지 내부로 vendored 이동 또는 정식 모듈화.
-3. **calibrate.py `__main__`의 `parents[2]` 루트 추정** — 저장소 구조가 바뀌면 깨짐. CLI 인자화.
-4. **`sys.path.insert` 기반 모듈 로딩 전반** — 정식 패키지 구조(`pyproject.toml`, `pip install -e .`,
+3. ~~**calibrate.py `__main__`의 `parents[2]` 루트 추정**~~ — 저장소 구조가 바뀌면 깨짐. CLI 인자화.
+4. ~~**`sys.path.insert` 기반 모듈 로딩 전반**~~ — 정식 패키지 구조(`pyproject.toml`, `pip install -e .`,
    콘솔 스크립트 엔트리포인트)로 전환.
 
-## 4. 개선 방향 (분리 완료 후)
+## 4. 개선 방향 — 분리 완료, 이하 미착수
 
 - 리뷰 트리아지의 미해소 항목 확인·구현 (`docs/2026-07-09-kn-estimator-review-triage.md`).
 - 캘리브레이션 데이터 규격화: 원장 형식(세션1 `role=="run_total"`)이 rv 계열과 다름 —
   `results/rv3/run_ledger.jsonl`도 읽을 수 있는 어댑터 or 규격 문서화.
 - 타 프로젝트 일반화: SmartPlant 외 Spring 프로젝트에서 inventory/slice가 도는지
   (README의 "절대 USD 비보증 — 단일 프로젝트 캘리브레이션" 한계 명시 유지).
-- 완료 정의: 분리 후에도 스모크 기준선 재현 — **inventory 167 EP · 캘리브레이션 5셀 ·
-  estimate 스모크가 시딩 시점과 동일 수치**여야 한다 (리팩토링의 행위 보존 검증).
+- ~~완료 정의: 분리 후에도 스모크 기준선 재현~~ — **충족(2026-07-16).** 설치된 `kn-estimate`가
+  inventory 167 EP · 캘리브레이션 5셀 · `N=167 chunks=60 k_avg=2.8 est=$143.91`을 재현하고,
+  산출물이 골든과 **바이트 일치**한다 (`kn-plan.json` sha256 `db19bcf9…`,
+  `kn-report.md` `ab230896…`). 신규 클론에서 `results/`를 지워도 동작한다.
 
 ## 5. 작업 규약
 
