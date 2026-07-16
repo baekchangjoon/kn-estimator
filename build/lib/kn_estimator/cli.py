@@ -2,9 +2,9 @@
 """kn-estimator CLI: 대상 프로젝트 정적 스캔 → N·w 분포·청크 플랜·비용 예측.
 
 사용:
-  kn-estimate <project_root> [--mode template|flat] [--model sonnet|opus|haiku]
-              [--calibration cal.json] [--w-soft 180000] [--w-hard 900000]
-              [--conservative] [--parallel] [--out-dir .kn]
+  python3 estimate.py <project_root> [--mode template|flat] [--model sonnet|opus|haiku]
+                      [--calibration cal.json] [--w-soft 180000] [--w-hard 900000]
+                      [--conservative] [--parallel] [--out-dir .kn]
 
 출력: <out-dir>/kn-report.md (사람용), <out-dir>/kn-plan.json (기계용).
 LLM 호출 없음 — 파일 스캔만으로 수 초 내 동작.
@@ -25,24 +25,17 @@ def load_calibration(path=None):
     도구를 저장소에 묶었다. 이제 사전 산출본을 동봉하고, 원장은 `kn-calibrate`로
     오프라인 재생성한다. 부재·파손 시 조용히 폴백하지 않고 재생성 방법을 알린다.
     """
-    if path:
-        p = Path(path)
-        if not p.exists():
-            raise SystemExit(f"--calibration 경로를 찾을 수 없다: {p}")
-    else:
-        p = BUNDLED_CALIBRATION
-        if not p.exists():
-            # 동봉본이 없다 = 설치가 깨졌다. 원장이 있는 저장소에서만 재생성 가능하다.
-            raise SystemExit(
-                f"동봉 캘리브레이션이 없다: {p}\n"
-                "설치가 손상됐을 수 있다. 저장소에서 재생성:\n"
-                "  kn-calibrate --ledger results/run_ledger.jsonl --runs results/runs "
-                f"--out {p}")
+    p = Path(path) if path else BUNDLED_CALIBRATION
+    if not p.exists():
+        raise SystemExit(
+            f"캘리브레이션을 찾을 수 없다: {p}\n"
+            "재생성: kn-calibrate --ledger results/run_ledger.jsonl --runs results/runs "
+            f"--out {BUNDLED_CALIBRATION}")
     try:
         cal = json.loads(p.read_text())
     except json.JSONDecodeError as e:
         raise SystemExit(f"캘리브레이션 파싱 실패: {p}\n{e}")
-    if not isinstance(cal, dict) or not cal.get("cells"):
+    if not cal.get("cells"):
         raise SystemExit(f"캘리브레이션에 셀이 없다: {p}")
     return cal
 
@@ -76,6 +69,8 @@ def main():
                             w_hard=args.w_hard, w_soft=w_soft, parallel=args.parallel)
 
     matrix = {}
+    w_mean = sum(ws) / n
+    whs = [w / w_mean for w in ws]
     for mode in ("flat", "template"):
         for mdl in ("opus", "sonnet", "haiku"):
             key = f"{mode}/{mdl}"
@@ -89,7 +84,7 @@ def main():
                            "wall_h": round(pm["total_wall_s"] / 3600, 1)}
 
     out = Path(args.project_root) / args.out_dir
-    out.mkdir(parents=True, exist_ok=True)
+    out.mkdir(exist_ok=True)
     plan_json = {**{k: v for k, v in p.items() if k != "chunks"},
                  "chunks": [{**c, "endpoints": [f"{s['endpoint']['method']} {s['endpoint']['path']}"
                                                  for s in c["endpoints"]]} for c in p["chunks"]],

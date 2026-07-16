@@ -1,0 +1,108 @@
+{
+ "version": "kn-cal-1",
+ "source": "results/run_ledger.jsonl",
+ "pricing": {
+  "opus": {
+   "input": 5.0,
+   "output": 25.0
+  },
+  "sonnet": {
+   "input": 3.0,
+   "output": 15.0
+  },
+  "haiku": {
+   "input": 1.0,
+   "output": 5.0
+  },
+  "cache_write_mult": 2.0,
+  "cache_read_mult": 0.1
+ },
+ "alpha_default": 0.5,
+ "cells": {
+  "flat/opus": {
+   "S0": 51949.5,
+   "delta_env": 67809.57142857143,
+   "delta_ep": 15333.42857142857,
+   "tau_env": 22.0,
+   "tau_ep": 6.0,
+   "out_env": 18933.571428571428,
+   "out_ep": 10378.42857142857,
+   "latency_s_per_turn": 19.35972461273666,
+   "measured_costs": [
+    6.32,
+    10.21,
+    11.73
+   ],
+   "n_runs": 6,
+   "env_split_approx": false
+  },
+  "flat/sonnet": {
+   "S0": 64154,
+   "delta_env": 100705.99072028945,
+   "delta_ep": 22772.126159963816,
+   "tau_env": 53.114285714285714,
+   "tau_ep": 14.485714285714286,
+   "out_env": 22557.95180089866,
+   "out_ep": 12365.131024887667,
+   "latency_s_per_turn": 9.337278106508876,
+   "measured_costs": [
+    9.09,
+    16.2,
+    16.8
+   ],
+   "n_runs": 3,
+   "env_split_approx": true
+  },
+  "template/opus": {
+   "S0": 22511,
+   "delta_env": 49908.53093699353,
+   "delta_ep": 11285.558632875809,
+   "tau_env": 14.77142857142857,
+   "tau_ep": 4.0285714285714285,
+   "out_env": 11257.15682606935,
+   "out_ep": 6170.605396741332,
+   "latency_s_per_turn": 18.886363636363637,
+   "measured_costs": [
+    4.72,
+    5.71,
+    6.56
+   ],
+   "n_runs": 3,
+   "env_split_approx": true
+  },
+  "template/sonnet": {
+   "S0": 34396,
+   "delta_env": 85136.7419560967,
+   "delta_ep": 19251.532255487913,
+   "tau_env": 16.65714285714286,
+   "tau_ep": 4.542857142857143,
+   "out_env": 13662.640141118382,
+   "out_ep": 7489.169982360202,
+   "latency_s_per_turn": 15.02127659574468,
+   "measured_costs": [
+    4.64,
+    5.63,
+    8.16
+   ],
+   "n_runs": 3,
+   "env_split_approx": true
+  },
+  "template/haiku": {
+   "S0": 26434,
+   "delta_env": 27661.813862791085,
+   "delta_ep": 6255.023267151115,
+   "tau_env": 4.714285714285714,
+   "tau_ep": 1.2857142857142856,
+   "out_env": 3143.4322647174617,
+   "out_ep": 1723.0709669103173,
+   "latency_s_per_turn": 13.533333333333333,
+   "measured_costs": [
+    0.3,
+    0.34,
+    0.36
+   ],
+   "n_runs": 3,
+   "env_split_approx": true
+  }
+ }
+}

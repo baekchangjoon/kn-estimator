@@ -1,0 +1,175 @@
+"""정적 스캔: 엔드포인트 인벤토리(N) + 엔드포인트별 작업량 슬라이스(w_i).
+
+설계 v2.2 (리뷰 K3 반영):
+- 컨트롤러 파일 토큰은 controller_shared_tokens로 분리 (청크당 1회 가산),
+  EP 단위 w에는 핸들러 메서드 span만.
+- 주입 해석: @Autowired 필드 / 생성자 파라미터 / Lombok private final 필드.
+- 인터페이스 타입은 동일 트리 *Impl 폴백.
+- MyBatis: DAO/Mapper가 참조하는 네임스페이스·패키지 병치 XML 조인.
+- 매칭 실패는 unresolved 플래그 (조용한 0 금지).
+"""
+import re
+from pathlib import Path
+
+from . import endpoints as _ep
+
+TOKENS_PER_BYTE = 1 / 4  # fallback 고지 대상 (보고서에 명시)
+SPRING_INFRA = {  # 프레임워크 타입은 슬라이스에서 제외
+    "DataSourceTransactionManager", "PlatformTransactionManager", "ObjectMapper",
+    "RestTemplate", "WebClient", "HttpSession", "HttpServletRequest", "HttpServletResponse",
+    "Model", "Logger", "MessageSource", "Environment",
+}
+EXTERNAL_CALL_TYPES = {"RestTemplate", "WebClient"}
+MAX_DEPTH = 2               # 주입 그래프 탐색 상한
+DEPTH_DECAY = {1: 1.0, 2: 0.5}  # 최단 깊이별 가중치 감쇠
+
+FIELD_INJ_RE = re.compile(
+    r"(?:@Autowired\s+(?:private|protected|public)?\s*|private\s+final\s+)"
+    r"([A-Z]\w+)(?:<[^>]*>)?\s+\w+\s*;")
+CTOR_PARAM_RE = re.compile(r"public\s+\w+\s*\(([^)]*)\)\s*\{")
+TYPE_IN_PARAM_RE = re.compile(r"([A-Z]\w+)(?:<[^>]*>)?\s+\w+")
+
+
+def tokens_of(path):
+    try:
+        return int(path.stat().st_size * TOKENS_PER_BYTE)
+    except OSError:
+        return 0
+
+
+def inventory(root):
+    return _ep.scan(root)
+
+
+class _Index:
+    """클래스명 → 소스 파일, 그리고 MyBatis XML 인덱스."""
+
+    def __init__(self, root):
+        self.root = Path(root)
+        # glob 순서는 파일시스템 readdir에 의존한다. by_class는 선착순(setdefault)이라
+        # 동일 stem 충돌 시, xmls는 files 순서에 각각 영향을 주므로 정렬로 고정한다.
+        self.by_class = {}
+        for f in sorted(self.root.glob("src/main/java/**/*.java")):
+            self.by_class.setdefault(f.stem, f)
+        self.xmls = sorted(self.root.glob("src/main/resources/**/*.xml"))
+
+    def resolve(self, type_name):
+        """타입 → 파일. 인터페이스면 *Impl 폴백. (file, is_interface) 또는 None."""
+        f = self.by_class.get(type_name)
+        if f is None:
+            return None
+        src = f.read_text(errors="replace")
+        if re.search(rf"\binterface\s+{type_name}\b", src):
+            impl = self.by_class.get(type_name + "Impl")
+            if impl is not None:
+                return impl
+        return f
+
+    def mybatis_xml_for(self, java_file):
+        """DAO/Mapper 파일의 패키지 병치 XML + 네임스페이스 일치 XML."""
+        out = []
+        pkg_dir = java_file.parent
+        rel = pkg_dir.relative_to(self.root / "src/main/java").parent  # dao/ 상위 모듈 디렉토리
+        for x in self.xmls:
+            try:
+                xrel = x.relative_to(self.root / "src/main/resources")
+            except ValueError:
+                continue
+            if str(xrel).startswith(str(rel)):
+                out.append(x)
+        return out
+
+
+def _injected_types(src):
+    """주입 타입을 정렬된 리스트로 반환.
+
+    set을 그대로 돌려주면 순회 순서가 해시 랜덤화에 좌우돼 w_tokens가 실행마다 달라진다.
+    """
+    types = set(FIELD_INJ_RE.findall(src))
+    for params in CTOR_PARAM_RE.findall(src):
+        types.update(TYPE_IN_PARAM_RE.findall(params))
+    return sorted(t for t in types if t not in SPRING_INFRA
+                  and not t.startswith(("String", "Long", "Int", "Map", "List")))
+
+
+def _handler_span_tokens(controller_src, handler):
+    for anns, name, body in _ep._methods(controller_src, controller_src.find("public class")):
+        if name == handler:
+            return int(len((anns + body).encode()) * TOKENS_PER_BYTE)
+    return 0
+
+
+def build_slices(root, eps):
+    root = Path(root)
+    idx = _Index(root)
+    out = []
+    ctrl_cache = {}
+    for e in eps:
+        cf = root / e["file"]
+        src = ctrl_cache.setdefault(e["file"], cf.read_text(errors="replace"))
+        handler_tok = _handler_span_tokens(src, e["handler"])
+        ctrl_tok = tokens_of(cf)
+        files, unresolved, external = [str(cf.relative_to(root))], [], False
+        seen = {e["controller"]}
+        w = handler_tok
+
+        # BFS: 감쇠는 엔드포인트로부터의 **최단 깊이**로 결정된다. DFS로 순회하면 공유
+        # 의존 타입이 어느 부모에서 먼저 닿느냐에 따라 감쇠와 하위 탐색 범위가 갈렸다.
+        frontier = [t for t in _injected_types(src) if t not in seen]
+        seen.update(frontier)
+        for depth in range(1, MAX_DEPTH + 1):
+            if not frontier:
+                break
+            decay = DEPTH_DECAY[depth]
+            next_frontier = []
+            for type_name in frontier:
+                if type_name in EXTERNAL_CALL_TYPES:
+                    external = True
+                    continue
+                f = idx.resolve(type_name)
+                if f is None:
+                    if type_name.endswith(("Service", "DAO", "Dao", "Mapper", "Repository")):
+                        unresolved.append(type_name)
+                    continue
+                w_add = int(tokens_of(f) * decay)
+                files.append(str(f.relative_to(root)))
+                fsrc = f.read_text(errors="replace")
+                if type_name.endswith(("DAO", "Dao", "Mapper", "Repository")):
+                    for x in idx.mybatis_xml_for(f):
+                        files.append(str(x.relative_to(root)))
+                        w_add += int(tokens_of(x) * decay)
+                w += w_add
+                if depth < MAX_DEPTH:   # 마지막 깊이의 자식은 어차피 처리되지 않는다
+                    for t in _injected_types(fsrc):
+                        if t not in seen:
+                            seen.add(t)
+                            next_frontier.append(t)
+            frontier = next_frontier
+
+        out.append({"endpoint": e, "w_tokens": w, "handler_tokens": handler_tok,
+                    "controller_shared_tokens": ctrl_tok, "files": files,
+                    "unresolved": unresolved, "external_call": external})
+    # 미해결 prior: 프로젝트 중앙값 w로 보정 (조용한 0 방지)
+    resolved_ws = [s["w_tokens"] for s in out if not s["unresolved"]]
+    med = sorted(resolved_ws)[len(resolved_ws) // 2] if resolved_ws else 0
+    for s in out:
+        if s["unresolved"] and s["w_tokens"] < med:
+            s["w_prior_applied"] = True
+            s["w_tokens"] = med
+    return out
+
+
+def w_hats(slices):
+    ws = [s["w_tokens"] for s in slices]
+    mean = sum(ws) / len(ws) if ws else 1
+    return [w / mean for w in ws]
+
+
+if __name__ == "__main__":
+    import json, sys
+    eps = inventory(sys.argv[1])
+    sls = build_slices(sys.argv[1], eps)
+    print(json.dumps({"n": len(eps),
+                      "w_median": sorted(s["w_tokens"] for s in sls)[len(sls) // 2],
+                      "unresolved_ratio": sum(1 for s in sls if s["unresolved"]) / len(sls)},
+                     indent=2))

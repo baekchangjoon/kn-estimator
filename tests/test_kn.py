@@ -1,4 +1,4 @@
-import json, os, sys
+import json, os, sys, unittest
 from pathlib import Path
 
 from kn_estimator import calibrate, model, plan, scan
@@ -12,8 +12,13 @@ RUNS = Path(os.environ.get("KN_RUNS") or REPO / "results/runs")
 SP = str(SUT)
 
 
-class SkipTest(Exception):
+class SkipTest(unittest.SkipTest):
     """건너뜀을 통과와 구분하기 위한 신호 — 조용한 green 금지.
+
+    `unittest.SkipTest`를 상속하므로 pytest가 이를 네이티브 skip으로 보고하고, 아래
+    standalone 러너도 그대로 잡는다. `pytest.skip()`은 쓸 수 없다 — 그것이 던지는
+    `Skipped`는 `BaseException` 계열이라 `except SkipTest`에 잡히지 않아, pytest가
+    설치된 환경에서 러너가 traceback으로 죽는다.
 
     `optional=True`는 설계상 선택적인 스모크(외부 샘플)를 뜻한다. 필수 게이트가
     건너뛰어지면 스위트를 red로 만들지만, 선택 스모크는 그러지 않는다.
@@ -25,11 +30,7 @@ class SkipTest(Exception):
 
 
 def _skip(reason, optional=False):
-    try:
-        import pytest
-    except ImportError:
-        raise SkipTest(reason, optional)
-    pytest.skip(reason)
+    raise SkipTest(reason, optional)
 
 
 def _require_sut():
