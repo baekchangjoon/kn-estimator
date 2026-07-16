@@ -8,12 +8,10 @@
 - MyBatis: DAO/Mapper가 참조하는 네임스페이스·패키지 병치 XML 조인.
 - 매칭 실패는 unresolved 플래그 (조용한 0 금지).
 """
-import re, sys
+import re
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent.parent / "harness"))
-import endpoints as _ep  # 경로 조인 수정판 스캐너 재사용
+from . import endpoints as _ep
 
 TOKENS_PER_BYTE = 1 / 4  # fallback 고지 대상 (보고서에 명시)
 SPRING_INFRA = {  # 프레임워크 타입은 슬라이스에서 제외
@@ -168,7 +166,7 @@ def w_hats(slices):
 
 
 if __name__ == "__main__":
-    import json
+    import json, sys
     eps = inventory(sys.argv[1])
     sls = build_slices(sys.argv[1], eps)
     print(json.dumps({"n": len(eps),

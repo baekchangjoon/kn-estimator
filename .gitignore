@@ -1,4 +1,7 @@
-legacy-sut/
+legacy-sut
 __pycache__/
 .kn/
 .codegraph/
+.venv/
+*.egg-info/
+.kn-*/

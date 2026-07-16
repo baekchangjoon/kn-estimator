@@ -91,12 +91,12 @@ g(K) = C(K)/K = a/K + b + c·K
 
 | 모듈 | 역할 |
 |---|---|
-| `harness/endpoints.py` | 컨트롤러 정규식 스캔 → JSON 엔드포인트 목록 |
+| `endpoints.py` | 컨트롤러 정규식 스캔 → JSON 엔드포인트 목록 (harness에서 vendored) |
 | `scan.py` | 인벤토리(N) + EP별 작업량 `w_i` 정적 슬라이스 |
 | `calibrate.py` | 실측 원장 + 트랜스크립트 → 셀별 계수 |
 | `model.py` | 청크 하나를 턴 단위로 이산 시뮬레이션 |
 | `plan.py` | FFD 청크 파티션 + W_target 그리드 최적화 |
-| `estimate.py` | CLI — 위를 엮어 보고서·플랜 산출 |
+| `cli.py` | CLI (`kn-estimate`) — 위를 엮어 보고서·플랜 산출 |
 
 ### 3.1 N — 엔드포인트 인벤토리
 

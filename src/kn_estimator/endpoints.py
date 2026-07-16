@@ -1,4 +1,10 @@
-import json, re, sys
+"""Spring 컨트롤러 정적 스캐너 — JSON 엔드포인트 인벤토리.
+
+reduce-token 실험 저장소의 `harness/endpoints.py`에서 vendored (2026-07-16).
+estimator가 쓰는 `scan()`과 `_methods()`만 가져왔다. 원본의 `N1`/`select_n8`/`__main__`은
+그 실험의 N=8 표본 선정·사전등록 산출물이라 이 도구와 무관해 제외했다.
+"""
+import re
 from pathlib import Path
 
 MAP_RE = re.compile(
@@ -95,47 +101,3 @@ def scan(root):
                         "method": method, "path": (base + sub) or "/",
                         "handler": handler, "json": True})
     return out
-
-N1 = {"path": "/web/super/admin/mngTerms", "method": "GET"}  # PR #17과 동일 (사전 등록)
-
-def select_n8(inv, seed=42):
-    import random
-    rng = random.Random(seed)
-    pool = [e for e in inv if not (e["path"] == N1["path"] and e["method"] == N1["method"])]
-    by_ctrl = {}
-    for e in sorted(pool, key=lambda x: (x["controller"], x["path"], x["method"])):
-        by_ctrl.setdefault(e["controller"], []).append(e)
-    ctrls = sorted(by_ctrl)
-    rng.shuffle(ctrls)
-    picked, methods_seen = [], set()
-    for want_new_method in (True, False):
-        for c in ctrls:
-            if len(picked) == 8:
-                break
-            if any(p["controller"] == c for p in picked):
-                continue
-            cands = [e for e in by_ctrl[c] if not want_new_method or e["method"] not in methods_seen]
-            if not cands:
-                continue
-            e = rng.choice(cands)
-            picked.append(e)
-            methods_seen.add(e["method"])
-    assert len(picked) == 8, f"N=8 selection shortfall: {len(picked)} (controllers with JSON endpoints: {len(by_ctrl)})"
-    return sorted(picked, key=lambda x: (x["controller"], x["path"]))
-
-if __name__ == "__main__":
-    root = sys.argv[1] if len(sys.argv) > 1 else str(Path(__file__).resolve().parent.parent / "legacy-sut")
-    inv = scan(root)
-    n1 = [e for e in inv if e["path"] == N1["path"] and e["method"] == N1["method"]]
-    data = {"inventory_count": len(inv), "n1": n1, "n8": select_n8(inv)}
-    results = Path(__file__).resolve().parent.parent / "results"
-    results.mkdir(exist_ok=True)
-    (results / "endpoints.json").write_text(json.dumps(data, indent=2, ensure_ascii=False))
-    lines = ["# LegacySut REST 엔드포인트 인벤토리 (사전 등록)", "",
-             f"- 전체 JSON 엔드포인트: {len(inv)}개", f"- N=1: `{N1['method']} {N1['path']}` (PR #17 동일)",
-             "", "## N=8 선정 (seed=42, 컨트롤러 중복 없음)", "",
-             "| Controller | Method | Path | Handler |", "|---|---|---|---|"]
-    for e in data["n8"]:
-        lines.append(f"| {e['controller']} | {e['method']} | {e['path']} | {e['handler']} |")
-    (results / "endpoint-inventory.md").write_text("\n".join(lines) + "\n")
-    print(f"inventory={len(inv)} n1={len(n1)} n8={len(data['n8'])}")

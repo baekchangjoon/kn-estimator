@@ -1,11 +1,11 @@
-import json, os, statistics, sys
+import json, os, sys
 from pathlib import Path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-import scan, calibrate, model, plan
+
+from kn_estimator import calibrate, model, plan, scan
 
 # 경로 해석: ① 환경변수 오버라이드 → ② 저장소 상대 기본값 (이 파일 기준).
-# tests/ → kn_estimator/ → tools/ → 저장소 루트 = parents[3].
-REPO = Path(__file__).resolve().parents[3]
+# tests/ → 저장소 루트 = parents[1].
+REPO = Path(__file__).resolve().parents[1]
 SUT = Path(os.environ.get("KN_SUT") or REPO / "legacy-sut")
 LEDGER = Path(os.environ.get("KN_LEDGER") or REPO / "results/run_ledger.jsonl")
 RUNS = Path(os.environ.get("KN_RUNS") or REPO / "results/runs")
