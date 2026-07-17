@@ -41,7 +41,9 @@ def compile_gate(ws, compile_cmd):
     r = subprocess.run(compile_cmd, shell=True, cwd=ws,
                        capture_output=True, text=True, timeout=600)
     if r.returncode != 0:
-        tail = (r.stdout + r.stderr)[-800:]
+        # 4000자: 컴파일 오류 목록의 선두(근본 원인)가 잘리지 않게 — 800자에서는
+        # "package io.restassured does not exist"가 잘리고 후속 오류만 남았다.
+        tail = (r.stdout + r.stderr)[-4000:]
         return False, f"compile FAIL rc={r.returncode}: {tail}"
     return True, "compile OK"
 
