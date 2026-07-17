@@ -1,0 +1,55 @@
+{
+  "inventory_count": 5,
+  "n1": [
+    {
+      "controller": "CommunityController",
+      "file": "src/main/java/com/tainted/community/web/CommunityController.java",
+      "method": "GET",
+      "path": "/internal/posts/{id}",
+      "handler": "getPost",
+      "json": true
+    }
+  ],
+  "n5": [
+    {
+      "controller": "CommunityController",
+      "file": "src/main/java/com/tainted/community/web/CommunityController.java",
+      "method": "GET",
+      "path": "/internal/posts",
+      "handler": "listPosts",
+      "json": true
+    },
+    {
+      "controller": "CommunityController",
+      "file": "src/main/java/com/tainted/community/web/CommunityController.java",
+      "method": "POST",
+      "path": "/internal/posts",
+      "handler": "createPost",
+      "json": true
+    },
+    {
+      "controller": "CommunityController",
+      "file": "src/main/java/com/tainted/community/web/CommunityController.java",
+      "method": "GET",
+      "path": "/internal/posts/{id}",
+      "handler": "getPost",
+      "json": true
+    },
+    {
+      "controller": "CommunityController",
+      "file": "src/main/java/com/tainted/community/web/CommunityController.java",
+      "method": "POST",
+      "path": "/internal/posts/{id}/comments",
+      "handler": "addComment",
+      "json": true
+    },
+    {
+      "controller": "CommunityController",
+      "file": "src/main/java/com/tainted/community/web/CommunityController.java",
+      "method": "POST",
+      "path": "/internal/posts/{id}/like",
+      "handler": "like",
+      "json": true
+    }
+  ]
+}
