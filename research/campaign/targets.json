@@ -3,7 +3,7 @@
   "petclinic": {
     "src": "/home/baek/github_spring-petclinic/spring-petclinic",
     "pin": "e4bebf28b449cb328dce72a9ecbad71c247ffd27",
-    "compile": "./mvnw -q test-compile -DskipTests",
+    "compile": "./mvnw -q test-compile -DskipTests -Dspring-javaformat.skip=true -Dcheckstyle.skip=true",
     "n_points": [1, 8]
   },
   "auth-user": {
