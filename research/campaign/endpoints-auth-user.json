@@ -1,0 +1,55 @@
+{
+  "inventory_count": 5,
+  "n1": [
+    {
+      "controller": "AuthController",
+      "file": "src/main/java/com/tainted/authuser/web/AuthController.java",
+      "method": "POST",
+      "path": "/api/v1/auth/login",
+      "handler": "login",
+      "json": true
+    }
+  ],
+  "n5": [
+    {
+      "controller": "AuthController",
+      "file": "src/main/java/com/tainted/authuser/web/AuthController.java",
+      "method": "POST",
+      "path": "/api/v1/auth/guest",
+      "handler": "guest",
+      "json": true
+    },
+    {
+      "controller": "AuthController",
+      "file": "src/main/java/com/tainted/authuser/web/AuthController.java",
+      "method": "POST",
+      "path": "/api/v1/auth/login",
+      "handler": "login",
+      "json": true
+    },
+    {
+      "controller": "InternalAuthController",
+      "file": "src/main/java/com/tainted/authuser/web/InternalAuthController.java",
+      "method": "POST",
+      "path": "/internal/auth/verify",
+      "handler": "verify",
+      "json": true
+    },
+    {
+      "controller": "InternalAuthController",
+      "file": "src/main/java/com/tainted/authuser/web/InternalAuthController.java",
+      "method": "GET",
+      "path": "/internal/users/{id}",
+      "handler": "getUser",
+      "json": true
+    },
+    {
+      "controller": "MeController",
+      "file": "src/main/java/com/tainted/authuser/web/MeController.java",
+      "method": "GET",
+      "path": "/api/v1/me",
+      "handler": "me",
+      "json": true
+    }
+  ]
+}

@@ -1,0 +1,79 @@
+{
+  "inventory_count": 13,
+  "n1": [
+    {
+      "controller": "OwnerRestController",
+      "file": "src/main/java/org/springframework/samples/petclinic/owner/OwnerRestController.java",
+      "method": "GET",
+      "path": "/api/owners/{ownerId}",
+      "handler": "getOwner",
+      "json": true
+    }
+  ],
+  "n8": [
+    {
+      "controller": "AuthController",
+      "file": "src/main/java/org/springframework/samples/petclinic/security/AuthController.java",
+      "method": "POST",
+      "path": "/api/auth/login",
+      "handler": "login",
+      "json": true
+    },
+    {
+      "controller": "OwnerRestController",
+      "file": "src/main/java/org/springframework/samples/petclinic/owner/OwnerRestController.java",
+      "method": "POST",
+      "path": "/api/owners",
+      "handler": "createOwner",
+      "json": true
+    },
+    {
+      "controller": "OwnerRestController",
+      "file": "src/main/java/org/springframework/samples/petclinic/owner/OwnerRestController.java",
+      "method": "PUT",
+      "path": "/api/owners/{ownerId}",
+      "handler": "updateOwner",
+      "json": true
+    },
+    {
+      "controller": "PetRestController",
+      "file": "src/main/java/org/springframework/samples/petclinic/owner/PetRestController.java",
+      "method": "POST",
+      "path": "/api/pets",
+      "handler": "createPet",
+      "json": true
+    },
+    {
+      "controller": "PetRestController",
+      "file": "src/main/java/org/springframework/samples/petclinic/owner/PetRestController.java",
+      "method": "PUT",
+      "path": "/api/pets/{petId}",
+      "handler": "updatePet",
+      "json": true
+    },
+    {
+      "controller": "VetController",
+      "file": "src/main/java/org/springframework/samples/petclinic/vet/VetController.java",
+      "method": "GET",
+      "path": "/vets",
+      "handler": "showResourcesVetList",
+      "json": true
+    },
+    {
+      "controller": "VetRestController",
+      "file": "src/main/java/org/springframework/samples/petclinic/vet/VetRestController.java",
+      "method": "GET",
+      "path": "/api/vets",
+      "handler": "getAllVets",
+      "json": true
+    },
+    {
+      "controller": "VetRestController",
+      "file": "src/main/java/org/springframework/samples/petclinic/vet/VetRestController.java",
+      "method": "GET",
+      "path": "/api/vets/{vetId}",
+      "handler": "getVet",
+      "json": true
+    }
+  ]
+}
