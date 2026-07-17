@@ -149,7 +149,8 @@ def _injected_types(src):
 
 
 def _handler_span_tokens(controller_src, handler):
-    for anns, name, body in _ep._methods(controller_src, controller_src.find("public class")):
+    cd = _ep.CLASS_DECL_RE.search(controller_src)
+    for anns, name, body in _ep._methods(controller_src, cd.start() if cd else 0):
         if name == handler:
             return int(len((anns + body).encode()) * TOKENS_PER_BYTE)
     return 0
