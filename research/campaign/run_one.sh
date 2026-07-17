@@ -71,7 +71,9 @@ WALL=$((TS1 - TS0))
 JQ() { $PY -c "import json,sys;d=json.load(open('$OUT/result.json'));print(d$1)"; }
 if [ $RC -ne 0 ] || ! JQ "['session_id']" >/dev/null 2>&1; then
   echo "[$RUN_ID] claude FAILED rc=$RC"; tail -3 "$OUT/stderr.log" 2>/dev/null
-  echo "{\"run_id\":\"$RUN_ID\",\"variant\":\"$ARM\",\"role\":\"run_total\",\"n\":$N,\"rep\":$REP,\"gate\":\"error\",\"wall_s\":$WALL,\"cost_usd\":0,\"output_tokens\":0}" >> "$RESULTS/run_ledger.jsonl"
+  # 실패해도 스트림 중단 전까지의 비용은 청구된다 — 비용 가드가 놓치지 않게 기록.
+  COST=$(JQ ".get('total_cost_usd',0)" 2>/dev/null || echo 0)
+  echo "{\"run_id\":\"$RUN_ID\",\"variant\":\"$ARM\",\"role\":\"run_total\",\"n\":$N,\"rep\":$REP,\"gate\":\"error\",\"wall_s\":$WALL,\"cost_usd\":${COST:-0},\"output_tokens\":0}" >> "$RESULTS/run_ledger.jsonl"
   exit 1
 fi
 SID=$(JQ "['session_id']")
