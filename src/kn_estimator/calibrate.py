@@ -109,11 +109,15 @@ def calibrate(ledger_path, runs_dir, include=None, min_runs=2):
         else:
             d_env, d_ep, t_env, t_ep, o_env, o_ep = tp
         total_turns = med([r["turns"] for r in runs])
+        # run 분산 밴드용 실측 비용은 셀의 최대 N(전체 규모 지점)에서 취한다.
+        # 구 구현은 n == 8 리터럴이었다 — LegacySut(최대 N=8) 전제가 새어나온 것으로,
+        # 최대 N이 다른 프로젝트에서 빈 배열이 되어 밴드가 기본값으로 조용히 퇴화했다.
+        max_n = max(r["n"] for r in runs)
         cells["/".join(cell)] = {
             "S0": s0, "delta_env": d_env, "delta_ep": d_ep,
             "tau_env": t_env, "tau_ep": t_ep, "out_env": o_env, "out_ep": o_ep,
             "latency_s_per_turn": med([r["wall"] / max(r["turns"], 1) for r in runs]),
-            "measured_costs": sorted(round(r["cost"], 2) for r in runs if r["n"] == 8),
+            "measured_costs": sorted(round(r["cost"], 2) for r in runs if r["n"] == max_n),
             "n_runs": len(runs), "env_split_approx": approx,
         }
     return {"version": "kn-cal-1", "source": str(ledger_path), "pricing": PRICING,
