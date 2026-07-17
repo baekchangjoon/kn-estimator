@@ -40,3 +40,17 @@ def test_measured_costs_uses_largest_n_not_hardcoded_8(tmp_path):
     cal = calibrate(ledger, tmp_path / "runs")
     cell = cal["cells"]["template/sonnet"]
     assert cell["measured_costs"] == [8.1, 9.3], cell["measured_costs"]
+
+
+def test_env_filling_soft_wall_produces_warning():
+    """F7: 캘리브레이션의 환경 고정분(S0+delta_env)이 W_soft를 사실상 채우면 파티션이
+    EP당 1청크로 조용히 퇴화한다 (캠페인 실측: 자체 캘리브레이션 예측이 실측의 3~6배).
+    경고를 내야 한다."""
+    from kn_estimator.cli import _env_wall_warning
+    cal = {"cells": {"template/sonnet": {"S0": 66000, "delta_env": 112000}}}
+    w = _env_wall_warning(cal, "template", "sonnet", w_soft=180000)
+    assert w is not None and "W_soft" in w
+    # 여유가 충분하면 경고 없음
+    assert _env_wall_warning(cal, "template", "sonnet", w_soft=320000) is None
+    # 미캘리브레이션 셀은 조용히 통과
+    assert _env_wall_warning(cal, "flat", "haiku", w_soft=180000) is None
