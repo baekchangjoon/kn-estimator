@@ -77,6 +77,26 @@ def _plan_interval(cal, mode, mdl, slices, p, w_soft):
     return min(lo_a, base) * b_lo, max(hi_a, base) * b_hi
 
 
+def _env_wall_warning(cal, mode, mdl, w_soft):
+    """환경 고정분이 W_soft를 사실상 채우면 경고 문자열, 아니면 None.
+
+    S0+delta_env가 벽의 90%를 넘으면 EP를 담을 여유가 없어 파티션이 EP당 1청크로
+    퇴화하고 고정비를 N번 물게 된다 — 다중 프로젝트 캠페인(2026-07-17)에서 자체
+    캘리브레이션 예측이 실측의 3~6배로 부풀던 원인. W_soft는 캘리브레이션에서
+    유도되지 않는 CLI 기본값이라, 새 캘리브레이션을 물릴 때는 게이트 통과 세션의
+    컨텍스트 분포로 재산정해야 한다.
+    """
+    c = cal["cells"].get(f"{mode}/{mdl}")
+    if not c:
+        return None
+    env = c.get("S0", 0) + c.get("delta_env", 0)
+    if env >= 0.9 * w_soft:
+        return (f"경고: 환경 고정분 S0+delta_env={env:,.0f}이 W_soft={w_soft:,}의 90%를 "
+                f"넘습니다. 파티션이 EP당 1청크로 퇴화해 비용이 과대추정될 수 있습니다 — "
+                f"게이트 통과 세션의 실측 컨텍스트 분포로 --w-soft 재산정을 권장합니다.")
+    return None
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("project_root")
@@ -101,6 +121,10 @@ def main():
     n = len(sls)
     tertiles = ws[n // 3], ws[2 * n // 3]
     unresolved = sum(1 for s in sls if s["unresolved"])
+
+    warn = _env_wall_warning(cal, args.mode, args.model, w_soft)
+    if warn:
+        print(warn)
 
     p = plan_mod.build_plan(sls, cal, mode=args.mode, mdl=args.model,
                             w_hard=args.w_hard, w_soft=w_soft, parallel=args.parallel)
