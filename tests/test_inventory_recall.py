@@ -71,3 +71,101 @@ def test_inline_response_body_and_array_mapping(tmp_path):
     eps = endpoints.scan(root)
     assert [(e["method"], e["path"], e["handler"]) for e in eps] == \
         [("GET", "/vets", "vetsJson")]
+
+
+# ---- JPA: 엔티티 1-hop (MyBatis XML 조인과 대칭) ------------------------------
+
+_JPA_CONTROLLER = """\
+    package com.x.web;
+
+    @RestController
+    @RequestMapping("/api/owners")
+    public class OwnerController {
+
+        private final OwnerRepository owners;
+
+        @GetMapping("/{id}")
+        public Owner one(@PathVariable int id) {
+            return owners.findById(id);
+        }
+    }
+"""
+
+_JPA_REPOSITORY = """\
+    package com.x.repo;
+
+    public interface OwnerRepository extends JpaRepository<Owner, Integer> {
+        Owner findById(int id);
+    }
+"""
+
+_JPA_ENTITY = """\
+    package com.x.domain;
+
+    @Entity
+    public class Owner {
+        private Integer id;
+        private String firstName;
+        private String lastName;
+        private String address;
+        private String telephone;
+    }
+"""
+
+
+def test_jpa_entity_joined_one_hop_at_repository_decay(tmp_path):
+    """JPA: `extends *Repository<Entity, ID>`의 엔티티가 리포지토리와 같은 감쇠로
+    w에 가산되고 files에 나타난다 (설계 결정: MyBatis XML 조인과 대칭)."""
+    root = _project(tmp_path, {
+        "src/main/java/com/x/web/OwnerController.java": _JPA_CONTROLLER,
+        "src/main/java/com/x/repo/OwnerRepository.java": _JPA_REPOSITORY,
+        "src/main/java/com/x/domain/Owner.java": _JPA_ENTITY,
+    })
+    sls = scan.build_slices(root, endpoints.scan(root))
+    assert len(sls) == 1
+    s = sls[0]
+    assert "src/main/java/com/x/domain/Owner.java" in s["files"]
+    repo_tok = scan.tokens_of(Path(root) / "src/main/java/com/x/repo/OwnerRepository.java")
+    ent_tok = scan.tokens_of(Path(root) / "src/main/java/com/x/domain/Owner.java")
+    # 깊이 1 → 감쇠 1.0이 리포지토리·엔티티에 동일 적용
+    assert s["w_tokens"] == s["handler_tokens"] + repo_tok + ent_tok
+    assert s["unresolved"] == []
+
+
+def test_jpa_entity_missing_is_silently_skipped(tmp_path):
+    """엔티티가 저장소 밖(외부 모듈 등)이면 크래시 없이 생략 — MyBatis XML 미발견과
+    동일 거동. unresolved는 건드리지 않는다."""
+    root = _project(tmp_path, {
+        "src/main/java/com/x/web/OwnerController.java": _JPA_CONTROLLER,
+        "src/main/java/com/x/repo/OwnerRepository.java": _JPA_REPOSITORY,
+    })
+    sls = scan.build_slices(root, endpoints.scan(root))
+    s = sls[0]
+    assert all(not f.endswith("Owner.java") for f in s["files"])
+    repo_tok = scan.tokens_of(Path(root) / "src/main/java/com/x/repo/OwnerRepository.java")
+    assert s["w_tokens"] == s["handler_tokens"] + repo_tok
+    assert s["unresolved"] == []
+
+
+def test_jpa_shared_entity_counted_once_per_slice(tmp_path):
+    """한 슬라이스에서 두 리포지토리가 같은 엔티티를 가리켜도 1회만 가산."""
+    second_repo = """\
+        package com.x.repo;
+
+        public interface OwnerAuditRepository extends CrudRepository<Owner, Long> {
+            Owner findLatest();
+        }
+    """
+    controller = _JPA_CONTROLLER.replace(
+        "private final OwnerRepository owners;",
+        "private final OwnerRepository owners;\n"
+        "    private final OwnerAuditRepository audits;")
+    root = _project(tmp_path, {
+        "src/main/java/com/x/web/OwnerController.java": controller,
+        "src/main/java/com/x/repo/OwnerRepository.java": _JPA_REPOSITORY,
+        "src/main/java/com/x/repo/OwnerAuditRepository.java": second_repo,
+        "src/main/java/com/x/domain/Owner.java": _JPA_ENTITY,
+    })
+    sls = scan.build_slices(root, endpoints.scan(root))
+    s = sls[0]
+    assert s["files"].count("src/main/java/com/x/domain/Owner.java") == 1
