@@ -22,7 +22,7 @@ def _attr(args, name):
         return m.group(1) if m else None
     return None
 
-DECL_RE = re.compile(r'public\s+[\w<>,\[\]. ]+\s+(\w+)\s*\(')
+DECL_RE = re.compile(r'public\s+[\w<>,\[\].? ]+\s+(\w+)\s*\(')
 
 def _methods(src, class_pos):
     """클래스 선언 이후를 순회하며 (직전 어노테이션 블록, 핸들러명, 메서드 본문)을 산출.
