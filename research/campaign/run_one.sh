@@ -6,7 +6,8 @@ set -uo pipefail
 PROJECT="$1"; ARM="$2"; N="$3"; REP="$4"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 RT=/home/baek/temp/reduce-token
-CFG="$RT/harness/claude-config"
+# 원본 claude-config는 OAuth 만료 + 수정 금지 규약 → 전용 config (원본 설정 최소본 + 현재 자격증명)
+CFG=/home/baek/temp/campaign-claude-config
 WS_ROOT=/home/baek/temp/campaign-ws
 RESULTS="$HERE/../../results/campaign/$PROJECT"
 RUN_ID="${PROJECT}_${ARM}-n${N}-r${REP}"
