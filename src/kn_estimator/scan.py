@@ -8,6 +8,7 @@
 - 주입 해석: @Autowired 필드 / 생성자 파라미터 / Lombok private final 필드.
 - 인터페이스 타입은 동일 트리 *Impl 폴백.
 - MyBatis: DAO/Mapper가 참조하는 네임스페이스·패키지 병치 XML 조인.
+- JPA: Spring Data 리포지토리의 extends 제네릭 첫 인자(엔티티)를 1-hop 조인.
 - 매칭 실패는 unresolved 플래그 (조용한 0 금지).
 """
 import re
@@ -36,6 +37,9 @@ MAPPER_NS_RE = re.compile(r'<mapper\s+namespace\s*=\s*"([^"]+)"')
 #   MyBatis mapper 인터페이스: namespace가 FQCN         → 아래 _namespaces_of가 별도 처리
 STATEMENT_ID_RE = re.compile(r'"([\w.]+)\.\w+"')
 PACKAGE_RE = re.compile(r"package\s+([\w.]+)\s*;")
+# Spring Data 리포지토리: extends <Base>Repository<Entity, ...>의 첫 제네릭 인자가 엔티티.
+SPRING_DATA_EXTENDS_RE = re.compile(
+    r"\binterface\s+\w+[^{]*?\bextends\b[^{]*?\b\w*Repository\s*<\s*(\w+)")
 
 
 def tokens_of(path):
@@ -104,6 +108,16 @@ class _Index:
         if pkg:
             out.add(f"{pkg.group(1)}.{java_file.stem}")  # mapper 인터페이스: FQCN
         return out
+
+    def jpa_entity_for(self, java_file):
+        """Spring Data 리포지토리의 엔티티 파일 — MyBatis XML 조인의 JPA 대응.
+
+        `extends *Repository<Entity, ...>`의 첫 제네릭 인자를 해석한다. 미해석(엔티티가
+        외부 모듈 등)은 XML 미발견과 동일하게 조용히 None — 리포지토리 자체는 해석에
+        성공했으므로 unresolved가 아니다.
+        """
+        m = SPRING_DATA_EXTENDS_RE.search(java_file.read_text(errors="replace"))
+        return self.by_class.get(m.group(1)) if m else None
 
     def _colocated_xml_for(self, java_file):
         out = []
@@ -180,6 +194,10 @@ def build_slices(root, eps):
                     for x in idx.mybatis_xml_for(f):
                         files.append(str(x.relative_to(root)))
                         w_add += int(tokens_of(x) * decay)
+                    ent = idx.jpa_entity_for(f)
+                    if ent is not None and str(ent.relative_to(root)) not in files:
+                        files.append(str(ent.relative_to(root)))
+                        w_add += int(tokens_of(ent) * decay)
                 w += w_add
                 if depth < MAX_DEPTH:   # 마지막 깊이의 자식은 어차피 처리되지 않는다
                     for t in _injected_types(fsrc):
