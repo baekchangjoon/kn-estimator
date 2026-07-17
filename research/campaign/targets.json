@@ -1,0 +1,21 @@
+{
+  "_comment": "다중 프로젝트 캘리브레이션 캠페인 대상 (2026-07-17, 규모 B). compile은 워크스페이스 안에서 실행된다.",
+  "petclinic": {
+    "src": "/home/baek/github_spring-petclinic/spring-petclinic",
+    "pin": "e4bebf28b449cb328dce72a9ecbad71c247ffd27",
+    "compile": "./mvnw -q test-compile -DskipTests",
+    "n_points": [1, 8]
+  },
+  "auth-user": {
+    "src": "/home/baek/temp/tainted-spring/tainted-spring-auth-user",
+    "pin": "537054da03cc7b489eed5af7fbffffabf238dc8c",
+    "compile": "/home/baek/temp/reduce-token/harness/tools/apache-maven/bin/mvn -q test-compile -DskipTests",
+    "n_points": [1, 5]
+  },
+  "community": {
+    "src": "/home/baek/temp/tainted-spring/tainted-spring-community",
+    "pin": "b66562d60687a68f7304d691eec7469194495594",
+    "compile": "/home/baek/temp/reduce-token/harness/tools/apache-maven/bin/mvn -q test-compile -DskipTests",
+    "n_points": [1, 5]
+  }
+}
