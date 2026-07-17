@@ -23,6 +23,9 @@ def _attr(args, name):
     return None
 
 DECL_RE = re.compile(r'public\s+(?:@\w+\s+)*[\w<>,\[\].? ]+\s+(\w+)\s*\(')
+# 클래스 선언 — Spring 컨트롤러는 package-private일 수 있다 (upstream petclinic 계열 전부).
+# 줄 시작 앵커로 javadoc·주석 내 "class" 오탐을 배제한다.
+CLASS_DECL_RE = re.compile(r'(?m)^\s*(?:(?:public|final|abstract|strictfp)\s+)*class\s+\w+')
 
 def _methods(src, class_pos):
     """클래스 선언 이후를 순회하며 (직전 어노테이션 블록, 핸들러명, 메서드 본문)을 산출.
@@ -72,7 +75,7 @@ def scan(root):
         if "@Controller" not in src and "@RestController" not in src:
             continue
         rest_class = "@RestController" in src
-        cd = re.search(r'public\s+class\s+\w+', src)
+        cd = CLASS_DECL_RE.search(src)
         if not cd:
             continue
         head = src[:cd.start()]
