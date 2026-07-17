@@ -43,3 +43,31 @@ def test_wildcard_generic_return_type_is_scanned(tmp_path):
         """})
     got = {(e["method"], e["path"]) for e in endpoints.scan(root)}
     assert got == {("POST", "/api/auth/login"), ("POST", "/api/auth/plain")}
+
+
+# ---- B2: 인라인 @ResponseBody + 배열형 매핑 값 -------------------------------
+
+def test_inline_response_body_and_array_mapping(tmp_path):
+    """B2: 반환 타입 위치의 `@ResponseBody`와 배열형 `@GetMapping({ "/vets" })`
+    (실측: petclinic VetController 1 EP 누락). 뷰 반환 MVC 핸들러는 계속 배제."""
+    root = _project(tmp_path, {
+        "src/main/java/com/x/VetController.java": """\
+            package com.x;
+
+            @Controller
+            public class VetController {
+
+                @GetMapping({ "/vets" })
+                public @ResponseBody Vets vetsJson() {
+                    return new Vets();
+                }
+
+                @GetMapping("/vets.html")
+                public String vetsPage(Model model) {
+                    return "vets/vetList";
+                }
+            }
+        """})
+    eps = endpoints.scan(root)
+    assert [(e["method"], e["path"], e["handler"]) for e in eps] == \
+        [("GET", "/vets", "vetsJson")]
