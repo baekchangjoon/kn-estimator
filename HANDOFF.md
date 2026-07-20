@@ -54,8 +54,14 @@ python3.12 -m venv .venv && .venv/bin/pip install -e .
 - 리뷰 트리아지의 미해소 항목 확인·구현 (`docs/2026-07-09-kn-estimator-review-triage.md`).
 - 캘리브레이션 데이터 규격화: 원장 형식(세션1 `role=="run_total"`)이 rv 계열과 다름 —
   `results/rv3/run_ledger.jsonl`도 읽을 수 있는 어댑터 or 규격 문서화.
-- 타 프로젝트 일반화: SmartPlant 외 Spring 프로젝트에서 inventory/slice가 도는지
-  (README의 "절대 USD 비보증 — 단일 프로젝트 캘리브레이션" 한계 명시 유지).
+- ~~타 프로젝트 일반화: SmartPlant 외 Spring 프로젝트에서 inventory/slice가 도는지~~ —
+  **완료(2026-07-20).** ①외부 21회 스캔 시험 → 인벤토리 결함 3건 수리(`ResponseEntity<?>`,
+  인라인 `@ResponseBody`, package-private 클래스) + JPA 엔티티 1-hop 추가, petclinic
+  재현율 10/13→13/13. ②3개 프로젝트 실측 캘리브레이션 캠페인(54 run, $205) → 계수
+  이전성 패턴·모드 순서 역전·파일럿 루프 ±10% 검증, calibrate/CLI 결함 2건 수리.
+  상세: `docs/2026-07-20-multi-project-calibration-campaign.md`.
+  (README의 "절대 USD 비보증 — 단일 프로젝트 캘리브레이션" 한계 명시는 유지 —
+  동봉 기본 캘리브레이션은 여전히 SmartPlant 단일이다.)
 - ~~완료 정의: 분리 후에도 스모크 기준선 재현~~ — **충족(2026-07-16).** 설치된 `kn-estimate`가
   inventory 167 EP · 캘리브레이션 5셀 · `N=167 chunks=60 k_avg=2.8 est=$143.91`을 재현하고,
   산출물이 골든과 **바이트 일치**한다 (`kn-plan.json` sha256 `db19bcf9…`,
