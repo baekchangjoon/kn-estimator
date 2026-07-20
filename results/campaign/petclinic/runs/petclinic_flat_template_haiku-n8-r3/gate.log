@@ -1,0 +1,20 @@
+coverage OK
+compile FAIL rc=1: [ERROR] COMPILATION ERROR : 
+[ERROR] /home/baek/temp/campaign-ws/petclinic/src/test/java/org/springframework/samples/petclinic/owner/blackbox/ApiPetsUpdateBlackBoxTest.java:[37,47] integer number too large
+[ERROR] /home/baek/temp/campaign-ws/petclinic/src/test/java/org/springframework/samples/petclinic/vet/blackbox/ApiVetsGetBlackBoxTest.java:[36,47] integer number too large
+[ERROR] /home/baek/temp/campaign-ws/petclinic/src/test/java/org/springframework/samples/petclinic/vet/blackbox/ApiVetsListBlackBoxTest.java:[36,47] integer number too large
+[ERROR] /home/baek/temp/campaign-ws/petclinic/src/test/java/org/springframework/samples/petclinic/vet/blackbox/VetsListBlackBoxTest.java:[36,47] integer number too large
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.14.1:testCompile (default-testCompile) on project spring-petclinic: Compilation failure: Compilation failure: 
+[ERROR] /home/baek/temp/campaign-ws/petclinic/src/test/java/org/springframework/samples/petclinic/owner/blackbox/ApiPetsUpdateBlackBoxTest.java:[37,47] integer number too large
+[ERROR] /home/baek/temp/campaign-ws/petclinic/src/test/java/org/springframework/samples/petclinic/vet/blackbox/ApiVetsGetBlackBoxTest.java:[36,47] integer number too large
+[ERROR] /home/baek/temp/campaign-ws/petclinic/src/test/java/org/springframework/samples/petclinic/vet/blackbox/ApiVetsListBlackBoxTest.java:[36,47] integer number too large
+[ERROR] /home/baek/temp/campaign-ws/petclinic/src/test/java/org/springframework/samples/petclinic/vet/blackbox/VetsListBlackBoxTest.java:[36,47] integer number too large
+[ERROR] -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException
+
+GATE: fail

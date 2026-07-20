@@ -1,0 +1,44 @@
+coverage OK
+compile FAIL rc=1: /petclinic/owner/blackbox/OwnerGetBlackBoxTest.java:[52,30] cannot find symbol
+  symbol:   variable ContentType
+  location: class org.springframework.samples.petclinic.owner.blackbox.OwnerGetBlackBoxTest
+[ERROR] /home/baek/temp/campaign-ws/petclinic/src/test/java/org/springframework/samples/petclinic/owner/blackbox/OwnerGetBlackBoxTest.java:[51,16] cannot find symbol
+  symbol:   method given()
+  location: class org.springframework.samples.petclinic.owner.blackbox.OwnerGetBlackBoxTest
+[ERROR] /home/baek/temp/campaign-ws/petclinic/src/test/java/org/springframework/samples/petclinic/owner/blackbox/OwnerGetBlackBoxTest.java:[65,13] cannot find symbol
+  symbol:   method given()
+  location: class org.springframework.samples.petclinic.owner.blackbox.OwnerGetBlackBoxTest
+[ERROR] /home/baek/temp/campaign-ws/petclinic/src/test/java/org/springframework/samples/petclinic/owner/blackbox/OwnerGetBlackBoxTest.java:[90,13] cannot find symbol
+  symbol:   method given()
+  location: class org.springframework.samples.petclinic.owner.blackbox.OwnerGetBlackBoxTest
+[ERROR] /home/baek/temp/campaign-ws/petclinic/src/test/java/org/springframework/samples/petclinic/owner/blackbox/OwnerGetBlackBoxTest.java:[108,13] cannot find symbol
+  symbol:   method given()
+  location: class org.springframework.samples.petclinic.owner.blackbox.OwnerGetBlackBoxTest
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.14.1:testCompile (default-testCompile) on project spring-petclinic: Compilation failure: Compilation failure: 
+[ERROR] /home/baek/temp/campaign-ws/petclinic/src/test/java/org/springframework/samples/petclinic/owner/blackbox/OwnerGetBlackBoxTest.java:[7,29] package io.restassured does not exist
+[ERROR] /home/baek/temp/campaign-ws/petclinic/src/test/java/org/springframework/samples/petclinic/owner/blackbox/OwnerGetBlackBoxTest.java:[7,1] static import only from classes and interfaces
+[ERROR] /home/baek/temp/campaign-ws/petclinic/src/test/java/org/springframework/samples/petclinic/owner/blackbox/OwnerGetBlackBoxTest.java:[19,27] package io.restassured.http does not exist
+[ERROR] /home/baek/temp/campaign-ws/petclinic/src/test/java/org/springframework/samples/petclinic/owner/blackbox/OwnerGetBlackBoxTest.java:[52,30] cannot find symbol
+[ERROR]   symbol:   variable ContentType
+[ERROR]   location: class org.springframework.samples.petclinic.owner.blackbox.OwnerGetBlackBoxTest
+[ERROR] /home/baek/temp/campaign-ws/petclinic/src/test/java/org/springframework/samples/petclinic/owner/blackbox/OwnerGetBlackBoxTest.java:[51,16] cannot find symbol
+[ERROR]   symbol:   method given()
+[ERROR]   location: class org.springframework.samples.petclinic.owner.blackbox.OwnerGetBlackBoxTest
+[ERROR] /home/baek/temp/campaign-ws/petclinic/src/test/java/org/springframework/samples/petclinic/owner/blackbox/OwnerGetBlackBoxTest.java:[65,13] cannot find symbol
+[ERROR]   symbol:   method given()
+[ERROR]   location: class org.springframework.samples.petclinic.owner.blackbox.OwnerGetBlackBoxTest
+[ERROR] /home/baek/temp/campaign-ws/petclinic/src/test/java/org/springframework/samples/petclinic/owner/blackbox/OwnerGetBlackBoxTest.java:[90,13] cannot find symbol
+[ERROR]   symbol:   method given()
+[ERROR]   location: class org.springframework.samples.petclinic.owner.blackbox.OwnerGetBlackBoxTest
+[ERROR] /home/baek/temp/campaign-ws/petclinic/src/test/java/org/springframework/samples/petclinic/owner/blackbox/OwnerGetBlackBoxTest.java:[108,13] cannot find symbol
+[ERROR]   symbol:   method given()
+[ERROR]   location: class org.springframework.samples.petclinic.owner.blackbox.OwnerGetBlackBoxTest
+[ERROR] -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException
+
+GATE: fail

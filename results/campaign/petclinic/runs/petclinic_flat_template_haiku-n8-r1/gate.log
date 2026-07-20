@@ -1,0 +1,46 @@
+coverage OK
+compile FAIL rc=1: /baek/temp/campaign-ws/petclinic/src/test/java/org/springframework/samples/petclinic/vet/blackbox/ApiVetsGetBlackBoxTest.java:[49,30] cannot find symbol
+[ERROR]   symbol:   variable ContentType
+[ERROR]   location: class org.springframework.samples.petclinic.vet.blackbox.ApiVetsGetBlackBoxTest
+[ERROR] /home/baek/temp/campaign-ws/petclinic/src/test/java/org/springframework/samples/petclinic/vet/blackbox/ApiVetsGetBlackBoxTest.java:[48,16] cannot find symbol
+[ERROR]   symbol:   method given()
+[ERROR]   location: class org.springframework.samples.petclinic.vet.blackbox.ApiVetsGetBlackBoxTest
+[ERROR] /home/baek/temp/campaign-ws/petclinic/src/test/java/org/springframework/samples/petclinic/vet/blackbox/ApiVetsGetBlackBoxTest.java:[62,13] cannot find symbol
+[ERROR]   symbol:   method given()
+[ERROR]   location: class org.springframework.samples.petclinic.vet.blackbox.ApiVetsGetBlackBoxTest
+[ERROR] /home/baek/temp/campaign-ws/petclinic/src/test/java/org/springframework/samples/petclinic/vet/blackbox/ApiVetsGetBlackBoxTest.java:[83,13] cannot find symbol
+[ERROR]   symbol:   method given()
+[ERROR]   location: class org.springframework.samples.petclinic.vet.blackbox.ApiVetsGetBlackBoxTest
+[ERROR] /home/baek/temp/campaign-ws/petclinic/src/test/java/org/springframework/samples/petclinic/vet/blackbox/ApiVetsGetBlackBoxTest.java:[102,13] cannot find symbol
+[ERROR]   symbol:   method given()
+[ERROR]   location: class org.springframework.samples.petclinic.vet.blackbox.ApiVetsGetBlackBoxTest
+[ERROR] /home/baek/temp/campaign-ws/petclinic/src/test/java/org/springframework/samples/petclinic/vet/blackbox/ApiVetsListBlackBoxTest.java:[48,30] cannot find symbol
+[ERROR]   symbol:   variable ContentType
+[ERROR]   location: class org.springframework.samples.petclinic.vet.blackbox.ApiVetsListBlackBoxTest
+[ERROR] /home/baek/temp/campaign-ws/petclinic/src/test/java/org/springframework/samples/petclinic/vet/blackbox/ApiVetsListBlackBoxTest.java:[47,16] cannot find symbol
+[ERROR]   symbol:   method given()
+[ERROR]   location: class org.springframework.samples.petclinic.vet.blackbox.ApiVetsListBlackBoxTest
+[ERROR] /home/baek/temp/campaign-ws/petclinic/src/test/java/org/springframework/samples/petclinic/vet/blackbox/ApiVetsListBlackBoxTest.java:[61,13] cannot find symbol
+[ERROR]   symbol:   method given()
+[ERROR]   location: class org.springframework.samples.petclinic.vet.blackbox.ApiVetsListBlackBoxTest
+[ERROR] /home/baek/temp/campaign-ws/petclinic/src/test/java/org/springframework/samples/petclinic/vet/blackbox/ApiVetsListBlackBoxTest.java:[79,13] cannot find symbol
+[ERROR]   symbol:   method given()
+[ERROR]   location: class org.springframework.samples.petclinic.vet.blackbox.ApiVetsListBlackBoxTest
+[ERROR] /home/baek/temp/campaign-ws/petclinic/src/test/java/org/springframework/samples/petclinic/vet/blackbox/ApiVetsListBlackBoxTest.java:[98,13] cannot find symbol
+[ERROR]   symbol:   method given()
+[ERROR]   location: class org.springframework.samples.petclinic.vet.blackbox.ApiVetsListBlackBoxTest
+[ERROR] /home/baek/temp/campaign-ws/petclinic/src/test/java/org/springframework/samples/petclinic/vet/blackbox/VetsListBlackBoxTest.java:[50,13] cannot find symbol
+[ERROR]   symbol:   method given()
+[ERROR]   location: class org.springframework.samples.petclinic.vet.blackbox.VetsListBlackBoxTest
+[ERROR] /home/baek/temp/campaign-ws/petclinic/src/test/java/org/springframework/samples/petclinic/vet/blackbox/VetsListBlackBoxTest.java:[66,13] cannot find symbol
+[ERROR]   symbol:   method given()
+[ERROR]   location: class org.springframework.samples.petclinic.vet.blackbox.VetsListBlackBoxTest
+[ERROR] -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException
+
+GATE: fail
