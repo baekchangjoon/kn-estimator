@@ -1,0 +1,73 @@
+{
+ "version": "kn-cal-1",
+ "source": "/home/baek/temp/kn-wt/fix-inventory-recall-jpa-1hop/results/campaign/auth-user/run_ledger.jsonl",
+ "pricing": {
+  "opus": {
+   "input": 5.0,
+   "output": 25.0
+  },
+  "sonnet": {
+   "input": 3.0,
+   "output": 15.0
+  },
+  "haiku": {
+   "input": 1.0,
+   "output": 5.0
+  },
+  "cache_write_mult": 2.0,
+  "cache_read_mult": 0.1
+ },
+ "alpha_default": 0.5,
+ "cells": {
+  "template/sonnet": {
+   "S0": 66105.5,
+   "delta_env": 123895.25,
+   "delta_ep": 18661.75,
+   "tau_env": 68.75,
+   "tau_ep": 2.25,
+   "out_env": 60958.0,
+   "out_ep": 8049.0,
+   "latency_s_per_turn": 15.280296610169492,
+   "measured_costs": [
+    5.06,
+    7.13,
+    8.22
+   ],
+   "n_runs": 6,
+   "env_split_approx": false
+  },
+  "template/haiku": {
+   "S0": 52911.0,
+   "delta_env": 37073.5,
+   "delta_ep": 1222.5,
+   "tau_env": 57.5,
+   "tau_ep": 1,
+   "out_env": 13884.75,
+   "out_ep": 1476.25,
+   "latency_s_per_turn": 4.977854971775944,
+   "measured_costs": [
+    0.54,
+    0.69,
+    0.83
+   ],
+   "n_runs": 6,
+   "env_split_approx": false
+  },
+  "flat/sonnet": {
+   "S0": 64382,
+   "delta_env": 53731.125,
+   "delta_ep": 21641.875,
+   "tau_env": 35.0,
+   "tau_ep": 7.0,
+   "out_env": 24668.375,
+   "out_ep": 10995.625,
+   "latency_s_per_turn": 10.333333333333334,
+   "measured_costs": [
+    4.6,
+    6.4
+   ],
+   "n_runs": 5,
+   "env_split_approx": false
+  }
+ }
+}

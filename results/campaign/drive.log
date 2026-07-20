@@ -1,0 +1,59 @@
+[skip] petclinic_flat_sonnet-n1-r1 (already in ledger)
+[skip] petclinic_flat_sonnet-n1-r2 (already in ledger)
+[skip] petclinic_flat_sonnet-n1-r3 (already in ledger)
+[skip] petclinic_flat_sonnet-n8-r1 (already in ledger)
+[skip] petclinic_flat_sonnet-n8-r2 (already in ledger)
+[skip] petclinic_flat_sonnet-n8-r3 (already in ledger)
+[skip] auth-user_flat_sonnet-n1-r1 (already in ledger)
+[skip] auth-user_flat_sonnet-n1-r2 (already in ledger)
+[skip] auth-user_flat_sonnet-n1-r3 (already in ledger)
+[skip] auth-user_flat_sonnet-n5-r1 (already in ledger)
+[skip] auth-user_flat_sonnet-n5-r2 (already in ledger)
+[skip] auth-user_flat_sonnet-n5-r3 (already in ledger)
+[skip] community_flat_sonnet-n1-r1 (already in ledger)
+=== [community_flat_sonnet-n1-r2] 시작 (누적 $182.90) ===
+[community_flat_sonnet-n1-r2] reset workspace
+[community_flat_sonnet-n1-r2] claude run (model=sonnet)
+[community_flat_sonnet-n1-r2] gate
+coverage OK
+compile OK
+GATE: pass
+ledger += community_flat_sonnet-n1-r2 gate=pass cost=$3.14 out=42318
+[community_flat_sonnet-n1-r2] done gate=pass wall=510s
+=== [community_flat_sonnet-n1-r3] 시작 (누적 $186.04) ===
+[community_flat_sonnet-n1-r3] reset workspace
+[community_flat_sonnet-n1-r3] claude run (model=sonnet)
+[community_flat_sonnet-n1-r3] gate
+coverage OK
+compile OK
+GATE: pass
+ledger += community_flat_sonnet-n1-r3 gate=pass cost=$2.73 out=40491
+[community_flat_sonnet-n1-r3] done gate=pass wall=478s
+=== [community_flat_sonnet-n5-r1] 시작 (누적 $188.77) ===
+[community_flat_sonnet-n5-r1] reset workspace
+[community_flat_sonnet-n5-r1] claude run (model=sonnet)
+[community_flat_sonnet-n5-r1] gate
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException
+
+GATE: fail
+ledger += community_flat_sonnet-n5-r1 gate=fail cost=$5.82 out=78768
+[community_flat_sonnet-n5-r1] done gate=fail wall=849s
+=== [community_flat_sonnet-n5-r2] 시작 (누적 $194.59) ===
+[community_flat_sonnet-n5-r2] reset workspace
+[community_flat_sonnet-n5-r2] claude run (model=sonnet)
+[community_flat_sonnet-n5-r2] gate
+coverage OK
+compile OK
+GATE: pass
+ledger += community_flat_sonnet-n5-r2 gate=pass cost=$5.10 out=82253
+[community_flat_sonnet-n5-r2] done gate=pass wall=896s
+=== [community_flat_sonnet-n5-r3] 시작 (누적 $199.69) ===
+[community_flat_sonnet-n5-r3] reset workspace
+[community_flat_sonnet-n5-r3] claude run (model=sonnet)
+[community_flat_sonnet-n5-r3] gate
+coverage OK
+compile OK
+GATE: pass
+ledger += community_flat_sonnet-n5-r3 gate=pass cost=$5.14 out=81213
+[community_flat_sonnet-n5-r3] done gate=pass wall=824s
+campaign complete. total=$204.83

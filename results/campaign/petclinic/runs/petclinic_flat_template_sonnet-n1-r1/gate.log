@@ -1,0 +1,15 @@
+coverage OK
+compile FAIL rc=1: n project spring-petclinic: Formatting violations found in the following files:
+[ERROR]  * /home/baek/temp/campaign-ws/petclinic/src/test/java/org/springframework/samples/petclinic/blackbox/OwnerGetByIdBlackBoxTest.java
+[ERROR]  * /home/baek/temp/campaign-ws/petclinic/src/test/java/org/springframework/samples/petclinic/blackbox/support/BlackBoxSupport.java
+[ERROR] 
+[ERROR] Run `spring-javaformat:apply` to fix.
+[ERROR] -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException
+
+GATE: fail
