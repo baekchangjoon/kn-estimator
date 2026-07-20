@@ -1,0 +1,826 @@
+[
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_haiku-n1-r1",
+  "ep": "GET /api/owners/{ownerId}",
+  "w_hat": 1.0459968950986915,
+  "out": 3584,
+  "delta": null
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_haiku-n1-r2",
+  "ep": "GET /api/owners/{ownerId}",
+  "w_hat": 1.0459968950986915,
+  "out": 3557,
+  "delta": null
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_haiku-n1-r2",
+  "ep": "GET /api/owners/{ownerId}",
+  "w_hat": 1.0459968950986915,
+  "out": 3775,
+  "delta": 6374
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_haiku-n1-r2",
+  "ep": "GET /api/owners/{ownerId}",
+  "w_hat": 1.0459968950986915,
+  "out": 3771,
+  "delta": 2688
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_haiku-n1-r2",
+  "ep": "GET /api/owners/{ownerId}",
+  "w_hat": 1.0459968950986915,
+  "out": 4069,
+  "delta": 4142
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_haiku-n1-r3",
+  "ep": "GET /api/owners/{ownerId}",
+  "w_hat": 1.0459968950986915,
+  "out": 2166,
+  "delta": null
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_haiku-n8-r1",
+  "ep": "POST /api/auth/login",
+  "w_hat": 0.6896429363495231,
+  "out": 2653,
+  "delta": null
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_haiku-n8-r1",
+  "ep": "POST /api/owners",
+  "w_hat": 1.0321579064094033,
+  "out": 2938,
+  "delta": 5160
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_haiku-n8-r1",
+  "ep": "PUT /api/owners/{ownerId}",
+  "w_hat": 1.0575293856730983,
+  "out": 3223,
+  "delta": 1874
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_haiku-n8-r1",
+  "ep": "POST /api/pets",
+  "w_hat": 1.375249500998004,
+  "out": 3035,
+  "delta": 1499
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_haiku-n8-r1",
+  "ep": "PUT /api/pets/{petId}",
+  "w_hat": 1.394278110445775,
+  "out": 3027,
+  "delta": 1501
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_haiku-n8-r1",
+  "ep": "GET /vets",
+  "w_hat": 0.6481259702816589,
+  "out": 1535,
+  "delta": 1439
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_haiku-n8-r1",
+  "ep": "GET /api/vets/{vetId}",
+  "w_hat": 0.6498558438678199,
+  "out": 1770,
+  "delta": 1089
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_haiku-n8-r1",
+  "ep": "GET /api/vets",
+  "w_hat": 0.6827234420048791,
+  "out": 1870,
+  "delta": 1008
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_haiku-n8-r2",
+  "ep": "POST /api/auth/login",
+  "w_hat": 0.6896429363495231,
+  "out": 3023,
+  "delta": null
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_haiku-n8-r2",
+  "ep": "POST /api/owners",
+  "w_hat": 1.0321579064094033,
+  "out": 2517,
+  "delta": 5665
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_haiku-n8-r2",
+  "ep": "PUT /api/owners/{ownerId}",
+  "w_hat": 1.0575293856730983,
+  "out": 2293,
+  "delta": 1284
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_haiku-n8-r2",
+  "ep": "POST /api/pets",
+  "w_hat": 1.375249500998004,
+  "out": 2411,
+  "delta": 1118
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_haiku-n8-r2",
+  "ep": "PUT /api/pets/{petId}",
+  "w_hat": 1.394278110445775,
+  "out": 2443,
+  "delta": 1150
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_haiku-n8-r2",
+  "ep": "GET /vets",
+  "w_hat": 0.6481259702816589,
+  "out": 1980,
+  "delta": 3041
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_haiku-n8-r2",
+  "ep": "GET /api/vets/{vetId}",
+  "w_hat": 0.6498558438678199,
+  "out": 2548,
+  "delta": 1141
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_haiku-n8-r3",
+  "ep": "POST /api/auth/login",
+  "w_hat": 0.6896429363495231,
+  "out": 2945,
+  "delta": null
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_haiku-n8-r3",
+  "ep": "POST /api/owners",
+  "w_hat": 1.0321579064094033,
+  "out": 3358,
+  "delta": 5043
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_haiku-n8-r3",
+  "ep": "PUT /api/owners/{ownerId}",
+  "w_hat": 1.0575293856730983,
+  "out": 3263,
+  "delta": 1368
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_haiku-n8-r3",
+  "ep": "POST /api/pets",
+  "w_hat": 1.375249500998004,
+  "out": 3153,
+  "delta": 4357
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_haiku-n8-r3",
+  "ep": "PUT /api/pets/{petId}",
+  "w_hat": 1.394278110445775,
+  "out": 3225,
+  "delta": 1396
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_haiku-n8-r3",
+  "ep": "GET /vets",
+  "w_hat": 0.6481259702816589,
+  "out": 1534,
+  "delta": 1386
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_haiku-n8-r3",
+  "ep": "GET /api/vets/{vetId}",
+  "w_hat": 0.6498558438678199,
+  "out": 2316,
+  "delta": 737
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_haiku-n8-r3",
+  "ep": "GET /api/vets",
+  "w_hat": 0.6827234420048791,
+  "out": 2420,
+  "delta": 1034
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_haiku-n8-r3",
+  "ep": "POST /api/owners",
+  "w_hat": 1.0321579064094033,
+  "out": 2644,
+  "delta": 5367
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_haiku-n8-r3",
+  "ep": "POST /api/owners",
+  "w_hat": 1.0321579064094033,
+  "out": 2021,
+  "delta": 2287
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_haiku-n8-r3",
+  "ep": "POST /api/owners",
+  "w_hat": 1.0321579064094033,
+  "out": 1553,
+  "delta": 1497
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_haiku-n8-r3",
+  "ep": "PUT /api/owners/{ownerId}",
+  "w_hat": 1.0575293856730983,
+  "out": 1949,
+  "delta": 1001
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_haiku-n8-r3",
+  "ep": "POST /api/pets",
+  "w_hat": 1.375249500998004,
+  "out": 1776,
+  "delta": 877
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_haiku-n8-r3",
+  "ep": "PUT /api/pets/{petId}",
+  "w_hat": 1.394278110445775,
+  "out": 1796,
+  "delta": 855
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_haiku-n8-r3",
+  "ep": "GET /api/vets/{vetId}",
+  "w_hat": 0.6498558438678199,
+  "out": 1202,
+  "delta": 868
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_haiku-n8-r3",
+  "ep": "GET /api/vets",
+  "w_hat": 0.6827234420048791,
+  "out": 1498,
+  "delta": 625
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_sonnet-n1-r1",
+  "ep": "GET /api/owners/{ownerId}",
+  "w_hat": 1.0459968950986915,
+  "out": 7316,
+  "delta": null
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_sonnet-n1-r2",
+  "ep": "GET /api/owners/{ownerId}",
+  "w_hat": 1.0459968950986915,
+  "out": 4801,
+  "delta": null
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_sonnet-n1-r3",
+  "ep": "GET /api/owners/{ownerId}",
+  "w_hat": 1.0459968950986915,
+  "out": 7505,
+  "delta": null
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_sonnet-n8-r1",
+  "ep": "POST /api/auth/login",
+  "w_hat": 0.6896429363495231,
+  "out": 5328,
+  "delta": null
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_sonnet-n8-r2",
+  "ep": "POST /api/auth/login",
+  "w_hat": 0.6896429363495231,
+  "out": 4014,
+  "delta": null
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_sonnet-n8-r2",
+  "ep": "POST /api/owners",
+  "w_hat": 1.0321579064094033,
+  "out": 5080,
+  "delta": 42226
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_sonnet-n8-r2",
+  "ep": "PUT /api/owners/{ownerId}",
+  "w_hat": 1.0575293856730983,
+  "out": 4767,
+  "delta": 13961
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_sonnet-n8-r2",
+  "ep": "POST /api/pets",
+  "w_hat": 1.375249500998004,
+  "out": 4932,
+  "delta": 18617
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_sonnet-n8-r2",
+  "ep": "PUT /api/pets/{petId}",
+  "w_hat": 1.394278110445775,
+  "out": 4613,
+  "delta": 17339
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_sonnet-n8-r2",
+  "ep": "GET /vets",
+  "w_hat": 0.6481259702816589,
+  "out": 2798,
+  "delta": 22976
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_sonnet-n8-r2",
+  "ep": "GET /api/vets/{vetId}",
+  "w_hat": 0.6498558438678199,
+  "out": 2561,
+  "delta": 11143
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_sonnet-n8-r2",
+  "ep": "GET /api/vets",
+  "w_hat": 0.6827234420048791,
+  "out": 3115,
+  "delta": 4631
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_sonnet-n8-r3",
+  "ep": "POST /api/auth/login",
+  "w_hat": 0.6896429363495231,
+  "out": 5464,
+  "delta": null
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_sonnet-n8-r3",
+  "ep": "POST /api/owners",
+  "w_hat": 1.0321579064094033,
+  "out": 8777,
+  "delta": 51119
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_sonnet-n8-r3",
+  "ep": "PUT /api/owners/{ownerId}",
+  "w_hat": 1.0575293856730983,
+  "out": 9579,
+  "delta": 37555
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_sonnet-n8-r3",
+  "ep": "POST /api/pets",
+  "w_hat": 1.375249500998004,
+  "out": 10398,
+  "delta": 17629
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_sonnet-n8-r3",
+  "ep": "PUT /api/pets/{petId}",
+  "w_hat": 1.394278110445775,
+  "out": 10114,
+  "delta": 19843
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_sonnet-n8-r3",
+  "ep": "GET /vets",
+  "w_hat": 0.6481259702816589,
+  "out": 6608,
+  "delta": 11344
+ },
+ {
+  "project": "petclinic",
+  "run": "petclinic_flat_template_sonnet-n8-r3",
+  "ep": "GET /api/vets",
+  "w_hat": 0.6827234420048791,
+  "out": 5454,
+  "delta": 7812
+ },
+ {
+  "project": "auth-user",
+  "run": "auth-user_flat_template_haiku-n1-r1",
+  "ep": "POST /api/v1/auth/login",
+  "w_hat": 1.0003077870113881,
+  "out": 1841,
+  "delta": null
+ },
+ {
+  "project": "auth-user",
+  "run": "auth-user_flat_template_haiku-n1-r2",
+  "ep": "POST /api/v1/auth/login",
+  "w_hat": 1.0003077870113881,
+  "out": 4297,
+  "delta": null
+ },
+ {
+  "project": "auth-user",
+  "run": "auth-user_flat_template_haiku-n1-r3",
+  "ep": "POST /api/v1/auth/login",
+  "w_hat": 1.0003077870113881,
+  "out": 2610,
+  "delta": null
+ },
+ {
+  "project": "auth-user",
+  "run": "auth-user_flat_template_haiku-n5-r1",
+  "ep": "POST /api/v1/auth/guest",
+  "w_hat": 0.9910741766697446,
+  "out": 1855,
+  "delta": null
+ },
+ {
+  "project": "auth-user",
+  "run": "auth-user_flat_template_haiku-n5-r1",
+  "ep": "POST /api/v1/auth/login",
+  "w_hat": 1.0003077870113881,
+  "out": 2719,
+  "delta": 1523
+ },
+ {
+  "project": "auth-user",
+  "run": "auth-user_flat_template_haiku-n5-r2",
+  "ep": "POST /api/v1/auth/guest",
+  "w_hat": 0.9910741766697446,
+  "out": 1706,
+  "delta": null
+ },
+ {
+  "project": "auth-user",
+  "run": "auth-user_flat_template_haiku-n5-r2",
+  "ep": "POST /api/v1/auth/login",
+  "w_hat": 1.0003077870113881,
+  "out": 2047,
+  "delta": 2235
+ },
+ {
+  "project": "auth-user",
+  "run": "auth-user_flat_template_haiku-n5-r2",
+  "ep": "POST /internal/auth/verify",
+  "w_hat": 1.0033856571252693,
+  "out": 2238,
+  "delta": 1000
+ },
+ {
+  "project": "auth-user",
+  "run": "auth-user_flat_template_haiku-n5-r2",
+  "ep": "GET /internal/users/{id}",
+  "w_hat": 0.997229916897507,
+  "out": 2110,
+  "delta": 959
+ },
+ {
+  "project": "auth-user",
+  "run": "auth-user_flat_template_haiku-n5-r3",
+  "ep": "GET /internal/users/{id}",
+  "w_hat": 0.997229916897507,
+  "out": 1671,
+  "delta": 2819
+ },
+ {
+  "project": "auth-user",
+  "run": "auth-user_flat_template_sonnet-n1-r1",
+  "ep": "POST /api/v1/auth/login",
+  "w_hat": 1.0003077870113881,
+  "out": 7764,
+  "delta": null
+ },
+ {
+  "project": "auth-user",
+  "run": "auth-user_flat_template_sonnet-n1-r2",
+  "ep": "POST /api/v1/auth/login",
+  "w_hat": 1.0003077870113881,
+  "out": 7704,
+  "delta": null
+ },
+ {
+  "project": "auth-user",
+  "run": "auth-user_flat_template_sonnet-n5-r1",
+  "ep": "POST /api/v1/auth/guest",
+  "w_hat": 0.9910741766697446,
+  "out": 1692,
+  "delta": null
+ },
+ {
+  "project": "auth-user",
+  "run": "auth-user_flat_template_sonnet-n5-r1",
+  "ep": "POST /api/v1/auth/login",
+  "w_hat": 1.0003077870113881,
+  "out": 7483,
+  "delta": 30831
+ },
+ {
+  "project": "auth-user",
+  "run": "auth-user_flat_template_sonnet-n5-r1",
+  "ep": "POST /internal/auth/verify",
+  "w_hat": 1.0033856571252693,
+  "out": 3837,
+  "delta": 37232
+ },
+ {
+  "project": "auth-user",
+  "run": "auth-user_flat_template_sonnet-n5-r1",
+  "ep": "GET /internal/users/{id}",
+  "w_hat": 0.997229916897507,
+  "out": 5420,
+  "delta": 41851
+ },
+ {
+  "project": "auth-user",
+  "run": "auth-user_flat_template_sonnet-n5-r1",
+  "ep": "GET /internal/users/{id}",
+  "w_hat": 0.997229916897507,
+  "out": 6185,
+  "delta": 8696
+ },
+ {
+  "project": "auth-user",
+  "run": "auth-user_flat_template_sonnet-n5-r1",
+  "ep": "GET /api/v1/me",
+  "w_hat": 1.0080024622960913,
+  "out": 3559,
+  "delta": 39261
+ },
+ {
+  "project": "auth-user",
+  "run": "auth-user_flat_template_sonnet-n5-r2",
+  "ep": "POST /api/v1/auth/guest",
+  "w_hat": 0.9910741766697446,
+  "out": 2609,
+  "delta": null
+ },
+ {
+  "project": "auth-user",
+  "run": "auth-user_flat_template_sonnet-n5-r2",
+  "ep": "POST /api/v1/auth/login",
+  "w_hat": 1.0003077870113881,
+  "out": 8155,
+  "delta": 15658
+ },
+ {
+  "project": "auth-user",
+  "run": "auth-user_flat_template_sonnet-n5-r2",
+  "ep": "POST /internal/auth/verify",
+  "w_hat": 1.0033856571252693,
+  "out": 5895,
+  "delta": 49007
+ },
+ {
+  "project": "auth-user",
+  "run": "auth-user_flat_template_sonnet-n5-r2",
+  "ep": "GET /internal/users/{id}",
+  "w_hat": 0.997229916897507,
+  "out": 6531,
+  "delta": 40480
+ },
+ {
+  "project": "auth-user",
+  "run": "auth-user_flat_template_sonnet-n5-r3",
+  "ep": "POST /api/v1/auth/guest",
+  "w_hat": 0.9910741766697446,
+  "out": 1525,
+  "delta": null
+ },
+ {
+  "project": "auth-user",
+  "run": "auth-user_flat_template_sonnet-n5-r3",
+  "ep": "POST /api/v1/auth/login",
+  "w_hat": 1.0003077870113881,
+  "out": 4935,
+  "delta": 853
+ },
+ {
+  "project": "auth-user",
+  "run": "auth-user_flat_template_sonnet-n5-r3",
+  "ep": "POST /internal/auth/verify",
+  "w_hat": 1.0033856571252693,
+  "out": 2840,
+  "delta": 2799
+ },
+ {
+  "project": "auth-user",
+  "run": "auth-user_flat_template_sonnet-n5-r3",
+  "ep": "GET /internal/users/{id}",
+  "w_hat": 0.997229916897507,
+  "out": 3937,
+  "delta": 1646
+ },
+ {
+  "project": "auth-user",
+  "run": "auth-user_flat_template_sonnet-n5-r3",
+  "ep": "GET /api/v1/me",
+  "w_hat": 1.0080024622960913,
+  "out": 2593,
+  "delta": 1995
+ },
+ {
+  "project": "community",
+  "run": "community_flat_template_haiku-n1-r1",
+  "ep": "GET /internal/posts/{id}",
+  "w_hat": 0.9952385398188779,
+  "out": 2317,
+  "delta": null
+ },
+ {
+  "project": "community",
+  "run": "community_flat_template_haiku-n1-r2",
+  "ep": "GET /internal/posts/{id}",
+  "w_hat": 0.9952385398188779,
+  "out": 3358,
+  "delta": null
+ },
+ {
+  "project": "community",
+  "run": "community_flat_template_haiku-n5-r2",
+  "ep": "GET /internal/posts",
+  "w_hat": 0.992437680888806,
+  "out": 1697,
+  "delta": null
+ },
+ {
+  "project": "community",
+  "run": "community_flat_template_haiku-n5-r2",
+  "ep": "POST /internal/posts",
+  "w_hat": 1.0036411166090935,
+  "out": 2073,
+  "delta": 1190
+ },
+ {
+  "project": "community",
+  "run": "community_flat_template_haiku-n5-r2",
+  "ep": "GET /internal/posts/{id}",
+  "w_hat": 0.9952385398188779,
+  "out": 1815,
+  "delta": 1348
+ },
+ {
+  "project": "community",
+  "run": "community_flat_template_haiku-n5-r2",
+  "ep": "POST /internal/posts/{id}/comments",
+  "w_hat": 1.0134441228643452,
+  "out": 2649,
+  "delta": 1186
+ },
+ {
+  "project": "community",
+  "run": "community_flat_template_haiku-n5-r3",
+  "ep": "POST /internal/posts/{id}/comments",
+  "w_hat": 1.0134441228643452,
+  "out": 2781,
+  "delta": 1703
+ },
+ {
+  "project": "community",
+  "run": "community_flat_template_sonnet-n1-r1",
+  "ep": "GET /internal/posts/{id}",
+  "w_hat": 0.9952385398188779,
+  "out": 7194,
+  "delta": null
+ },
+ {
+  "project": "community",
+  "run": "community_flat_template_sonnet-n1-r2",
+  "ep": "GET /internal/posts/{id}",
+  "w_hat": 0.9952385398188779,
+  "out": 7867,
+  "delta": null
+ },
+ {
+  "project": "community",
+  "run": "community_flat_template_sonnet-n1-r3",
+  "ep": "GET /internal/posts/{id}",
+  "w_hat": 0.9952385398188779,
+  "out": 8989,
+  "delta": null
+ },
+ {
+  "project": "community",
+  "run": "community_flat_template_sonnet-n5-r1",
+  "ep": "GET /internal/posts",
+  "w_hat": 0.992437680888806,
+  "out": 4062,
+  "delta": null
+ },
+ {
+  "project": "community",
+  "run": "community_flat_template_sonnet-n5-r2",
+  "ep": "GET /internal/posts",
+  "w_hat": 0.992437680888806,
+  "out": 3512,
+  "delta": null
+ },
+ {
+  "project": "community",
+  "run": "community_flat_template_sonnet-n5-r2",
+  "ep": "POST /internal/posts",
+  "w_hat": 1.0036411166090935,
+  "out": 8000,
+  "delta": 4846
+ },
+ {
+  "project": "community",
+  "run": "community_flat_template_sonnet-n5-r2",
+  "ep": "GET /internal/posts/{id}",
+  "w_hat": 0.9952385398188779,
+  "out": 3386,
+  "delta": 8546
+ },
+ {
+  "project": "community",
+  "run": "community_flat_template_sonnet-n5-r2",
+  "ep": "POST /internal/posts/{id}/comments",
+  "w_hat": 1.0134441228643452,
+  "out": 6641,
+  "delta": 4501
+ },
+ {
+  "project": "community",
+  "run": "community_flat_template_sonnet-n5-r2",
+  "ep": "POST /internal/posts/{id}/like",
+  "w_hat": 0.9952385398188779,
+  "out": 3498,
+  "delta": 5447
+ },
+ {
+  "project": "community",
+  "run": "community_flat_template_sonnet-n5-r3",
+  "ep": "GET /internal/posts",
+  "w_hat": 0.992437680888806,
+  "out": 4377,
+  "delta": null
+ },
+ {
+  "project": "community",
+  "run": "community_flat_template_sonnet-n5-r3",
+  "ep": "POST /internal/posts",
+  "w_hat": 1.0036411166090935,
+  "out": 7656,
+  "delta": 5966
+ },
+ {
+  "project": "community",
+  "run": "community_flat_template_sonnet-n5-r3",
+  "ep": "GET /internal/posts/{id}",
+  "w_hat": 0.9952385398188779,
+  "out": 6072,
+  "delta": 5311
+ },
+ {
+  "project": "community",
+  "run": "community_flat_template_sonnet-n5-r3",
+  "ep": "POST /internal/posts/{id}/comments",
+  "w_hat": 1.0134441228643452,
+  "out": 6983,
+  "delta": 4679
+ }
+]
