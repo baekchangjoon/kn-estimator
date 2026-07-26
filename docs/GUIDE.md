@@ -143,6 +143,9 @@ kn-calibrate --ledger results/run_ledger.jsonl --runs results/runs --out my-cali
 kn-estimate <root> --calibration my-calibration.json
 ```
 
+`--calibration` 없이 실행하면(=동봉 SmartPlant 계수) CLI가 그 사실과 §4.4 파일럿
+절차를 자동 고지한다 — 캘리브레이션은 실측 원장이 필요해 도구가 대신 수행할 수 없다.
+
 원장에 등장하지만 산출에서 빠진 셀은 `skipped_cells`에 사유와 함께 기록되고 stderr로
 경고된다 — `no_usable_runs(gate_fail=…, missing_transcript=…)`(게이트 전멸·트랜스크립트
 전멸), `insufficient_runs(...)`(표본<2, 트랜스크립트 부재분 병기), 또는
