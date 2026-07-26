@@ -222,8 +222,10 @@ def main():
          " 평균 K와 다를 수 있다" if k_star else "- K*: 산출 불가 (캘리브레이션 부족)"),
         (f"- 비용 곡선(셀 합성, 단일 청크·평균 w 기준, USD): "
          f"C(K) ≈ {curve['a']:.2f} + {curve['b']:.3f}·K + {curve['c']:.4f}·K²"
-         f" — a: 청크 고정비, b: EP 한계비용, c: 컨텍스트 누적 항 (K*_cost=√(a/c))"
-         if curve else "- 비용 곡선: 산출 불가 (캘리브레이션 부족)"),
+         f" — a: 청크 고정비, b: EP 한계비용, c: 컨텍스트 누적 항"
+         f" (무제약 K*=√(a/c)≈{(curve['a'] / curve['c']) ** 0.5:.1f}"
+         " — 위 K*_cost는 K*_wall 절단 반영)"
+         if curve and curve["c"] > 0 else "- 비용 곡선: 산출 불가 (캘리브레이션 부족)"),
         f"- soft 초과 청크: {sum(1 for c in p['chunks'] if c['soft_exceeded'])}건"
         + (f" (요청 W_soft={w_soft:,} → 유효값으로 캡됨)" if p["w_soft"] < w_soft else ""), "",
         "## 모드×모델 매트릭스 (동일 플랜 로직)", "",
@@ -235,10 +237,11 @@ def main():
             lines.append(f"| {key} | ${v['total_cost_usd']} | {v['n_chunks']} | {v['k_avg']} | {v['wall_h']}h |")
     lines += ["", "## 컨트롤러 단위", "",
               "> n·Σw·배정 청크는 컨트롤러별로 산출하지만, 비용 계수(a,b,c)는 셀 전역"
-              " 하나다 — 컨트롤러 소속이 EP별 관측(out·δ)의 분산을 유의하게 설명하지"
-              " 못했다 (research/unit_variance.py, 전 케이스 순열 p≥0.079).", "",
+              " 하나다 — 컨트롤러 소속의 분산 설명력 검정(research/unit_variance.py)에서"
+              " 실질 검정 가능한 케이스(petclinic 2건)가 유의하지 않았고(p=0.079, 0.341),"
+              " 나머지는 표본 구조상 검정 불가·검정력 없음이었다.", "",
               "| 컨트롤러 | n (EP) | Σw (tokens) | 배정 청크 |", "|---|---|---|---|"]
-    for name in sorted(controllers, key=lambda n: -controllers[n]["n"]):
+    for name in sorted(controllers, key=lambda c: -controllers[c]["n"]):
         info = controllers[name]
         lines.append(f"| {name} | {info['n']} | {info['w_tokens']:,} "
                      f"| {', '.join(f'#{i}' for i in info['chunks'])} |")

@@ -88,7 +88,10 @@ def anova(groups):
 
 
 def permutation_p(labels, values, observed_eta2, iters=10_000, seed=0):
-    """라벨을 섞어 η² 영분포를 만들고 관측 η² 이상 비율을 p로 반환."""
+    """라벨을 섞어 η² 영분포를 만들고 관측 η² 이상 비율을 p로 반환.
+
+    (hits+1)/(iters+1) 보정 — 순열검정은 관측 자체가 영분포의 일원이므로 p=0은
+    원리적으로 불가능하다."""
     rng = random.Random(seed)
     hits = 0
     lab = list(labels)
@@ -100,7 +103,21 @@ def permutation_p(labels, values, observed_eta2, iters=10_000, seed=0):
         a = anova(groups)
         if a and a["eta2"] >= observed_eta2 - 1e-12:
             hits += 1
-    return hits / iters
+    return (hits + 1) / (iters + 1)
+
+
+def p_floor(sizes):
+    """이 그룹 크기 구성에서 도달 가능한 최소 p (검정력 진단).
+
+    서로 다른 배치 수 = n!/∏nᵢ!, 관측 배치와 동치인 배치 수 = 같은 크기 그룹끼리의
+    치환 ∏(같은 크기 개수)!. 표본이 작으면 이 하한이 α=0.05를 넘을 수 있다 — 그때는
+    어떤 데이터로도 유의에 도달할 수 없으므로 '검정 불가'로 분류해야 한다."""
+    from collections import Counter
+    from math import factorial, prod
+    n = sum(sizes)
+    distinct = factorial(n) // prod(factorial(s) for s in sizes)
+    equivalent = prod(factorial(m) for m in Counter(sizes).values())
+    return equivalent / distinct
 
 
 def per_ep_median(rows, channel):
@@ -124,12 +141,15 @@ def test_project(name, rows, results):
         if a is None:
             print(f"  {name}/{channel}: 검정 불가 (컨트롤러 {len(groups)}개, EP {len(pairs)}개)")
             continue
+        floor = p_floor([len(vs) for vs in groups.values()])
         p = permutation_p([c for c, _ in pairs], [v for _, v in pairs], a["eta2"])
         meds = {c: round(statistics.median(vs)) for c, vs in sorted(groups.items())}
+        powerless = " [검정력 없음: p 하한>0.05]" if floor > 0.05 else ""
         print(f"  {name}/{channel}: η²={a['eta2']:.3f} F={a['F']:.2f} "
-              f"(컨트롤러 {a['k']}, EP {a['n']}) 순열 p={p:.3f}  중앙값={meds}")
+              f"(컨트롤러 {a['k']}, EP {a['n']}) 순열 p={p:.3f} "
+              f"(p 하한={floor:.3f}){powerless}  중앙값={meds}")
         results.append({"project": name, "channel": channel, **a, "p": p,
-                        "medians": meds})
+                        "p_floor": floor, "medians": meds})
 
 
 def main():
