@@ -265,17 +265,6 @@ def main():
               "- 미캘리브레이션 셀은 insufficient_calibration으로 표기 (추정치 미제공)."]
     (out / "kn-report.md").write_text("\n".join(lines) + "\n")
     print(f"N={n} chunks={p['n_chunks']} k_avg={p['k_avg']} est=${p['total_cost_usd']}")
-    if not args.calibration:
-        # 자체 캘리브레이션 없이 = 동봉(LegacySut) 계수로 돌린 실행. 캘리브레이션은
-        # 실측 run 원장이 필요해 도구가 자동 수행할 수 없다 — 고지가 자동화의 상한.
-        # 캠페인 실측: 동봉 계수 그대로 −23~−34% 오차, 파일럿 재캘리브레이션 후 ±10%.
-        print("ℹ 이 프로젝트의 자체 캘리브레이션이 없습니다 — 동봉(LegacySut) 계수로 "
-              "추정했습니다 (상대 비교용, 절대 금액 비보증).\n"
-              "  금액 정확도가 필요하면 파일럿 캘리브레이션부터: 위 플랜의 그룹 1~2개를 "
-              "실측 → kn-calibrate --ledger <원장> --runs <런들> --out my-cal.json → "
-              "게이트 통과 세션의 컨텍스트 분포로 --w-soft 재산정 → "
-              "--calibration my-cal.json 으로 재실행 (실측 오차 −34% → ±10%). "
-              "절차: docs/GUIDE.md §4.4")
     if args.groups:
         # "그룹1(q, w, e), 그룹2(z, x, y)로 돌리세요" — 요청 한 줄에 실행 계획으로
         # 답하기 위한 출력. 각 그룹 = 독립 세션 1개 (이 조건이 1차 비용의 전제다).
@@ -297,6 +286,21 @@ def main():
               + (" (병렬 cache_write 할증 5% 포함)" if args.parallel else "")
               + (f", 예측구간 ${interval[0]:,.0f}~${interval[1]:,.0f}" if interval else "")
               + ".")
+    if not args.calibration:
+        # 자체 캘리브레이션 없이 = 동봉(LegacySut) 계수로 돌린 실행. 캘리브레이션은
+        # 실측 run 원장이 필요해 도구가 자동 수행할 수 없다 — 고지가 자동화의 상한.
+        # 처방은 실행 가능해야 한다: kn-calibrate의 env/ep 2점 분해에는 같은 셀에서
+        # **크기가 다른** run 2개 이상이 필요하다 (그룹 1개면 insufficient_runs 또는
+        # 기준 셀 부재로 셀이 산출되지 않는다). --groups 출력 뒤에 인쇄한다 — "플랜의
+        # 그룹"이 이미 인쇄된 것을 가리키게.
+        print("ℹ 이 프로젝트의 자체 캘리브레이션이 없습니다 — 동봉(LegacySut) 계수로 "
+              "추정했습니다 (상대 비교용, 절대 금액 비보증).\n"
+              "  금액 정확도가 필요하면 파일럿 캘리브레이션부터: 같은 모드×모델로 "
+              "크기가 다른 그룹 2개 이상 실측(예: EP 1개짜리 + 최소 그룹) → "
+              "kn-calibrate --ledger <원장> --runs <런들> --out my-cal.json → "
+              "게이트 통과 세션의 컨텍스트 분포로 --w-soft 재산정 → "
+              "--calibration my-cal.json 으로 재실행. 캠페인 설계(N 2점×반복 3) "
+              "실측에서 오차 −34% → ±10%. 원장 스키마·절차: docs/GUIDE.md §4.4")
     print(f"report: {out/'kn-report.md'}\nplan:   {out/'kn-plan.json'}")
 
 

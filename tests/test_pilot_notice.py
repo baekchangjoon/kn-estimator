@@ -34,6 +34,21 @@ def test_bundled_calibration_prints_pilot_notice(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "자체 캘리브레이션" in out
     assert "파일럿" in out and "kn-calibrate" in out
+    # 처방은 실행 가능해야 한다: 2점 분해에는 "크기가 다른" 그룹 2개 이상이 필요
+    # (그룹 1개는 kn-calibrate가 insufficient_runs/기준 셀 부재로 셀을 못 만든다)
+    assert "크기가 다른" in out
+    # ±10% 수치의 출처 설계(N 2점×반복)와 절차 문서를 인용
+    assert "±10%" in out and "§4.4" in out
+
+
+def test_pilot_notice_follows_groups_block(tmp_path, monkeypatch, capsys):
+    """--groups에서 고지가 "위 플랜의 그룹"을 참조하려면 그룹 목록 **뒤**에 와야
+    한다 — 앞에 오면 아직 인쇄되지 않은 출력을 가리키는 모순이 된다."""
+    root = _project(tmp_path)
+    monkeypatch.setattr(sys, "argv", ["kn-estimate", root, "--groups"])
+    cli.main()
+    out = capsys.readouterr().out
+    assert out.index("그룹1(") < out.index("ℹ")
 
 
 def test_explicit_calibration_suppresses_pilot_notice(tmp_path, monkeypatch, capsys):
