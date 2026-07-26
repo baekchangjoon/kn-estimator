@@ -178,6 +178,7 @@ kn-estimate /path/to/your-spring-project \
 | `--w-hard` | 900000 | 모델 상한 벽 (위반 불가, 모델별 윈도우×0.9로 자동 캡) |
 | `--conservative` | off | W_soft=150K 보수 프리셋 |
 | `--parallel` | off | 청크 병렬 실행 가정 (벽시계=max, cache_write 할증) |
+| `--groups` | off | 비용 최적 생성 묶음을 "그룹N(EP, …) — $비용" 실행 지시로 출력 |
 | `--out-dir` | .kn | 출력 디렉토리 |
 
 ### 4.3 결과 해석 가이드
