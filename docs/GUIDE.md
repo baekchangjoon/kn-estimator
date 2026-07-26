@@ -72,10 +72,14 @@ cache write 2.0x·read 0.1x — Claude Code 1h 캐시)이며 calibration.json에
 
 ### 2.3 K 결정 — 이층 벽 + 파티션 최적화
 
-- **W_hard** (기본 900K): 모델 컨텍스트 상한 — 어떤 청크도 초과 불가.
+- **W_hard** (기본 900K): 모델 컨텍스트 상한 — 어떤 청크도 초과 불가. 모델별
+  윈도우의 90%로 자동 캡된다 (opus/sonnet 1M→900K, haiku 200K→180K) — `--w-hard`를
+  더 크게 줘도 모델 상한을 넘길 수 없다. 보고서·플랜의 `w_hard`는 캡 적용 후 유효값.
 - **W_soft** (기본 180K): 품질 정책 벽 — 실측에서 게이트 통과 세션의 종료 컨텍스트
   분포(p50)로 역산한 값. 초과 시 비용에 15% 패널티를 부과하고 보고서에 경고
-  (컴팩션·후반부 품질 저하 리스크). `--conservative`로 150K 프리셋.
+  (컴팩션·후반부 품질 저하 리스크). `--conservative`로 150K 프리셋. 유효 W_hard보다
+  크게 주면 유효 W_hard로 캡된다 (예: haiku에 `--w-soft 400000` → 180K로 재해석,
+  보고서에 캡 사실 표기).
 - 파티션 생성: 컨트롤러 단위로 묶고(같은 컨트롤러의 EP는 분석 컨텍스트를 공유하므로)
   → δ̂ 내림차순 First-Fit-Decreasing으로 용량(W_target) 빈에 배치 → W_target 그리드
   {0.4, 0.55, 0.7, 0.85, 1.0}×soft예산에서 **파티션 전체를 시뮬레이션해 총비용이
@@ -139,6 +143,13 @@ kn-calibrate --ledger results/run_ledger.jsonl --runs results/runs --out my-cali
 kn-estimate <root> --calibration my-calibration.json
 ```
 
+원장에 등장하지만 산출에서 빠진 셀은 `skipped_cells`에 사유와 함께 기록되고 stderr로
+경고된다 — `no_usable_runs(gate_fail=…, missing_transcript=…)`(게이트 전멸·트랜스크립트
+전멸), `insufficient_runs(...)`(표본<2, 트랜스크립트 부재분 병기), 또는
+`single_n_without_reference_cell(flat/opus)`(단일 N 셀인데 env:ep 분해 기준이 될
+flat/opus 2점 fit이 원장에 없음). 원장에 variant 자체가 없는 셀은 기록하지 않는다.
+`kn-estimate`의 매트릭스도 이 사유를 `insufficient_calibration (…)`으로 병기한다.
+
 ### ④ 플랜·보고서
 
 - `kn-plan.json`: 청크별 엔드포인트 목록·예상 비용·피크 컨텍스트 — 러너가 그대로
@@ -163,10 +174,11 @@ kn-estimate /path/to/your-spring-project \
 | `--mode` | template | 생성 방식: `template`(spec→렌더러) / `flat`(직접 저작) |
 | `--model` | sonnet | opus / sonnet / haiku (미캘리브레이션 셀은 수치 미제공) |
 | `--calibration` | 내장 실측 | calibration.json 경로 (자체 실측으로 교체 가능) |
-| `--w-soft` | 180000 | 품질 정책 벽 (초과 시 패널티+경고) |
-| `--w-hard` | 900000 | 모델 상한 벽 (위반 불가) |
+| `--w-soft` | 180000 | 품질 정책 벽 (초과 시 패널티+경고, 유효 W_hard로 캡) |
+| `--w-hard` | 900000 | 모델 상한 벽 (위반 불가, 모델별 윈도우×0.9로 자동 캡) |
 | `--conservative` | off | W_soft=150K 보수 프리셋 |
 | `--parallel` | off | 청크 병렬 실행 가정 (벽시계=max, cache_write 할증) |
+| `--groups` | off | 비용 최적 생성 묶음을 "그룹N(EP, …) — $비용" 실행 지시로 출력 |
 | `--out-dir` | .kn | 출력 디렉토리 |
 
 ### 4.3 결과 해석 가이드
@@ -180,7 +192,13 @@ kn-estimate /path/to/your-spring-project \
    여전히 `template×haiku`(단, 검증 깊이 캐비앗 + 소형 프로젝트에서 셀 전멸 리스크 —
    캠페인에서 petclinic 0/6). 근거: `docs/2026-07-20-multi-project-calibration-campaign.md` §3.
 2. **`n_chunks`·`k_avg`를 실행 계획으로 쓴다** — kn-plan.json의 청크 순서대로
-   세션을 돌리고, 게이트 실패 청크만 재실행한다.
+   세션을 돌리고, 게이트 실패 청크만 재실행한다. 보고서의 `K*_cost`(셀 단가 최소 K)·
+   `K*_wall`(W_soft 용량 상한 K)은 평균 w 기준 참고 지표다 — 실제 파티션은 컨트롤러
+   경계를 우선하므로 k_avg가 이와 다를 수 있다. 보고서의 **비용 곡선**
+   `C(K) ≈ a + b·K + c·K²`(a: 청크 고정비, b: EP 한계비용, c: 컨텍스트 누적 항)와
+   **컨트롤러 단위** 표(n·Σw·배정 청크, kn-plan.json `cost_curve`/`controllers`)로
+   구성 간 비교와 단위별 배치를 읽는다. 컨트롤러 단위의 a,b,c 분화는 제공하지
+   않는다 — 근거: `2026-07-26-cost-curve-and-unit-coefficients.md`.
 3. **비용은 구간으로 읽는다** — 실측 run 분산이 ±30~46%였다. `pi_low~pi_high` 밖의
    결과가 나오면 캘리브레이션 재생성을 검토한다.
 4. **`unresolved` 비율이 높으면(>20%)** 정적 슬라이스가 그 프로젝트의 DI 패턴을

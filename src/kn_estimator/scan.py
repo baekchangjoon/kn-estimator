@@ -72,7 +72,7 @@ class _Index:
                 self.xml_by_namespace.setdefault(m.group(1), []).append(x)
 
     def resolve(self, type_name):
-        """타입 → 파일. 인터페이스면 *Impl 폴백. (file, is_interface) 또는 None."""
+        """타입 → 소스 파일(인터페이스면 *Impl 폴백), 못 찾으면 None."""
         f = self.by_class.get(type_name)
         if f is None:
             return None
@@ -193,7 +193,10 @@ def build_slices(root, eps):
                 fsrc = f.read_text(errors="replace")
                 if type_name.endswith(("DAO", "Dao", "Mapper", "Repository")):
                     for x in idx.mybatis_xml_for(f):
-                        files.append(str(x.relative_to(root)))
+                        xrel = str(x.relative_to(root))
+                        if xrel in files:   # 공유 XML은 슬라이스당 1회만 (엔티티와 동일 규칙)
+                            continue
+                        files.append(xrel)
                         w_add += int(tokens_of(x) * decay)
                     ent = idx.jpa_entity_for(f)
                     if ent is not None and str(ent.relative_to(root)) not in files:

@@ -47,7 +47,7 @@ def load_calibration(path=None):
     return cal
 
 
-def _plan_interval(cal, mode, mdl, slices, p, w_soft):
+def _plan_interval(cal, mode, mdl, slices, p, w_soft, parallel=False):
     """플랜 총액의 예측구간 (low, high).
 
     α 민감도는 **선택된 파티션 위에서** 재시뮬레이션해 구한다. `estimate_cell`의 비율을
@@ -70,6 +70,8 @@ def _plan_interval(cal, mode, mdl, slices, p, w_soft):
                 return None
             # build_plan과 동일한 누적 규칙 (soft 초과 패널티 포함)
             total += sim["cost_usd"] * (1.15 if sim["peak_context"] > w_soft else 1.0)
+        if parallel:   # build_plan과 동일한 병렬 할증 — 총액과 구간의 실행 가정 일치
+            total *= 1.05
         totals[alpha] = total
     base = p["total_cost_usd"]
     lo_a, hi_a = min(totals.values()), max(totals.values())
@@ -97,6 +99,35 @@ def _env_wall_warning(cal, mode, mdl, w_soft):
     return None
 
 
+def build_matrix(sls, cal, w_hard, w_soft, parallel=False):   # 인자 순서 = build_plan
+    """모드×모델 매트릭스 — 권장 플랜과 **같은 실행 가정**(parallel 포함)으로 계산한다.
+
+    parallel을 전달하지 않으면 권장 플랜(1.05× 할증)과 매트릭스의 동일 셀 총액이
+    어긋난다 (2026-07-26 감사 #7)."""
+    matrix = {}
+    for mode in ("flat", "template"):
+        for mdl in ("opus", "sonnet", "haiku"):
+            key = f"{mode}/{mdl}"
+            if key not in cal["cells"]:
+                # 캘리브레이션이 스킵 사유를 남겼으면 병기 — 맨 라벨만 보이면
+                # 사용자가 원인(게이트 전멸/표본 부족/기준 셀 부재)을 알 수 없다.
+                why = (cal.get("skipped_cells") or {}).get(key)
+                matrix[key] = (f"insufficient_calibration ({why})" if why
+                               else "insufficient_calibration")
+                continue
+            pm = plan_mod.build_plan(sls, cal, mode=mode, mdl=mdl,
+                                     w_hard=w_hard, w_soft=w_soft, parallel=parallel)
+            if pm.get("status"):
+                # 선택 셀이 아니어도 벽을 못 맞추는 셀이 있을 수 있다 (예: 작은 --w-hard에서
+                # flat/sonnet). 크래시 대신 상태를 표기한다.
+                matrix[key] = pm["status"]
+                continue
+            matrix[key] = {"total_cost_usd": pm["total_cost_usd"],
+                           "n_chunks": pm["n_chunks"], "k_avg": pm["k_avg"],
+                           "wall_h": round(pm["total_wall_s"] / 3600, 1)}
+    return matrix
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("project_root")
@@ -107,6 +138,8 @@ def main():
     ap.add_argument("--w-hard", type=int, default=plan_mod.W_HARD_DEFAULT)
     ap.add_argument("--conservative", action="store_true", help="W_soft=150K 보수 프리셋")
     ap.add_argument("--parallel", action="store_true")
+    ap.add_argument("--groups", action="store_true",
+                    help="비용 최적 생성 묶음을 '그룹N(EP, …)' 형태로 출력")
     ap.add_argument("--out-dir", default=".kn")
     args = ap.parse_args()
     w_soft = 150_000 if args.conservative else args.w_soft
@@ -122,41 +155,50 @@ def main():
     tertiles = ws[n // 3], ws[2 * n // 3]
     unresolved = sum(1 for s in sls if s["unresolved"])
 
-    warn = _env_wall_warning(cal, args.mode, args.model, w_soft)
+    # 선택 셀의 유효 벽 = build_plan이 실제로 쓰는 값 (모델 윈도우 캡 반영).
+    # 경고·K*·보고서가 이 값을 공유해야 한다 — 요청값을 그대로 쓰면 haiku에
+    # soft 벽이 hard 벽보다 큰 자기모순 보고서가 나온다.
+    eff_soft = min(w_soft, args.w_hard, plan_mod.model_w_hard(args.model))
+
+    warn = _env_wall_warning(cal, args.mode, args.model, eff_soft)
     if warn:
         print(warn)
 
     p = plan_mod.build_plan(sls, cal, mode=args.mode, mdl=args.model,
                             w_hard=args.w_hard, w_soft=w_soft, parallel=args.parallel)
     if p.get("status"):
-        print(f"{p['status']}: {p.get('reason', '')}")
+        why = (cal.get("skipped_cells") or {}).get(f"{args.mode}/{args.model}")
+        print(f"{p['status']}: {p.get('reason') or why or ''}")
         sys.exit(1)
 
-    interval = _plan_interval(cal, args.mode, args.model, sls, p, w_soft)
+    interval = _plan_interval(cal, args.mode, args.model, sls, p, p["w_soft"],
+                              parallel=args.parallel)
+    k_star = plan_mod.k_stars(cal, args.mode, args.model, p["w_soft"])
+    curve = plan_mod.cost_coefficients(cal, args.mode, args.model)
 
-    matrix = {}
-    for mode in ("flat", "template"):
-        for mdl in ("opus", "sonnet", "haiku"):
-            key = f"{mode}/{mdl}"
-            if key not in cal["cells"]:
-                matrix[key] = "insufficient_calibration"
-                continue
-            pm = plan_mod.build_plan(sls, cal, mode=mode, mdl=mdl,
-                                     w_hard=args.w_hard, w_soft=w_soft)
-            if pm.get("status"):
-                # 선택 셀이 아니어도 벽을 못 맞추는 셀이 있을 수 있다 (예: 작은 --w-hard에서
-                # flat/sonnet). 크래시 대신 상태를 표기한다.
-                matrix[key] = pm["status"]
-                continue
-            matrix[key] = {"total_cost_usd": pm["total_cost_usd"],
-                           "n_chunks": pm["n_chunks"], "k_avg": pm["k_avg"],
-                           "wall_h": round(pm["total_wall_s"] / 3600, 1)}
+    # 컨트롤러 단위 요약: n(EP 수)·Σw·배정 청크. 단위별 a,b,c는 만들지 않는다 —
+    # 컨트롤러 소속의 분산 설명력 검정(research/unit_variance.py)에서 유의한 근거가
+    # 없었다 (전 케이스 순열 p≥0.079, 절반은 구조적으로 검정 불가).
+    controllers = {}
+    for i, c in enumerate(p["chunks"]):
+        for s in c["endpoints"]:
+            info = controllers.setdefault(s["endpoint"]["controller"],
+                                          {"n": 0, "w_tokens": 0, "chunks": []})
+            info["n"] += 1
+            info["w_tokens"] += s["w_tokens"]
+            if i not in info["chunks"]:
+                info["chunks"].append(i)
+
+    matrix = build_matrix(sls, cal, args.w_hard, w_soft, args.parallel)
 
     out = Path(args.project_root) / args.out_dir
     out.mkdir(parents=True, exist_ok=True)
     plan_json = {**{k: v for k, v in p.items() if k != "chunks"},
                  "chunks": [{**c, "endpoints": [f"{s['endpoint']['method']} {s['endpoint']['path']}"
                                                  for s in c["endpoints"]]} for c in p["chunks"]],
+                 "k_star": k_star,
+                 "cost_curve": curve,
+                 "controllers": controllers,
                  "calibration_version": cal["version"]}
     (out / "kn-plan.json").write_text(json.dumps(plan_json, indent=2, ensure_ascii=False))
 
@@ -176,8 +218,18 @@ def main():
         (f"- **예측구간: ${interval[0]:,.0f} ~ ${interval[1]:,.0f}**"
          " — 이 파티션의 α 민감도 × 실측 run 분산. 점추정보다 이 구간으로 해석할 것."
          if interval else "- 예측구간: 산출 불가 (캘리브레이션 부족)"),
-        f"- 벽: W_soft={w_soft:,} (품질 정책), W_hard={args.w_hard:,} (모델 상한)",
-        f"- soft 초과 청크: {sum(1 for c in p['chunks'] if c['soft_exceeded'])}건", "",
+        f"- 벽: W_soft={p['w_soft']:,} (품질 정책), W_hard={p['w_hard']:,} (모델 상한 반영)",
+        (f"- K*_cost={k_star['k_cost']} (셀 단가 최소 K), K*_wall={k_star['k_wall']}"
+         " (W_soft 용량 상한, 평균 w 기준) — 실제 파티션은 컨트롤러 경계·δ̂ 기반이라"
+         " 평균 K와 다를 수 있다" if k_star else "- K*: 산출 불가 (캘리브레이션 부족)"),
+        (f"- 비용 곡선(셀 합성, 단일 청크·평균 w 기준, USD): "
+         f"C(K) ≈ {curve['a']:.2f} + {curve['b']:.3f}·K + {curve['c']:.4f}·K²"
+         f" — a: 청크 고정비, b: EP 한계비용, c: 컨텍스트 누적 항"
+         f" (무제약 K*=√(a/c)≈{(curve['a'] / curve['c']) ** 0.5:.1f}"
+         " — 위 K*_cost는 K*_wall 절단 반영)"
+         if curve and curve["c"] > 0 else "- 비용 곡선: 산출 불가 (캘리브레이션 부족)"),
+        f"- soft 초과 청크: {sum(1 for c in p['chunks'] if c['soft_exceeded'])}건"
+        + (f" (요청 W_soft={w_soft:,} → 유효값으로 캡됨)" if p["w_soft"] < w_soft else ""), "",
         "## 모드×모델 매트릭스 (동일 플랜 로직)", "",
         "| 구성 | 총비용 | 청크 수 | 평균 K | 벽시계 |", "|---|---|---|---|---|"]
     for key, v in matrix.items():
@@ -185,6 +237,16 @@ def main():
             lines.append(f"| {key} | {v} | — | — | — |")
         else:
             lines.append(f"| {key} | ${v['total_cost_usd']} | {v['n_chunks']} | {v['k_avg']} | {v['wall_h']}h |")
+    lines += ["", "## 컨트롤러 단위", "",
+              "> n·Σw·배정 청크는 컨트롤러별로 산출하지만, 비용 계수(a,b,c)는 셀 전역"
+              " 하나다 — 컨트롤러 소속의 분산 설명력 검정(research/unit_variance.py)에서"
+              " 실질 검정 가능한 케이스(petclinic 2건)가 유의하지 않았고(p=0.079, 0.341),"
+              " 나머지는 표본 구조상 검정 불가·검정력 없음이었다.", "",
+              "| 컨트롤러 | n (EP) | Σw (tokens) | 배정 청크 |", "|---|---|---|---|"]
+    for name in sorted(controllers, key=lambda c: -controllers[c]["n"]):
+        info = controllers[name]
+        lines.append(f"| {name} | {info['n']} | {info['w_tokens']:,} "
+                     f"| {', '.join(f'#{i}' for i in info['chunks'])} |")
     lines += ["", "## 슬라이스 크기 상위 10 엔드포인트", "",
               "> w는 **코드 크기**(bytes/4)다 — 분기 수 등 복잡도는 반영하지 않는다.", "",
               "| Endpoint | w (tokens) | external | unresolved |", "|---|---|---|---|"]
@@ -203,6 +265,27 @@ def main():
               "- 미캘리브레이션 셀은 insufficient_calibration으로 표기 (추정치 미제공)."]
     (out / "kn-report.md").write_text("\n".join(lines) + "\n")
     print(f"N={n} chunks={p['n_chunks']} k_avg={p['k_avg']} est=${p['total_cost_usd']}")
+    if args.groups:
+        # "그룹1(q, w, e), 그룹2(z, x, y)로 돌리세요" — 요청 한 줄에 실행 계획으로
+        # 답하기 위한 출력. 각 그룹 = 독립 세션 1개 (이 조건이 1차 비용의 전제다).
+        print(f"\n[{Path(args.project_root).resolve().name}] "
+              f"비용 최적 생성 묶음 ({args.mode}×{args.model}):")
+        for i, c in enumerate(p["chunks"], 1):
+            ep_labels = ", ".join(f"{s['endpoint']['method']} {s['endpoint']['path']}"
+                                  for s in c["endpoints"])
+            # 그룹 비용은 soft 페널티 반영값 — 총액과의 합산 정합을 위해서다
+            # (병렬 할증 5%는 플랜 수준 근사라 총액에만 명시).
+            shown = round(c["est_cost_usd"] * (1.15 if c["soft_exceeded"] else 1.0), 2)
+            mark = " ⚠soft 초과" if c["soft_exceeded"] else ""
+            print(f"  그룹{i}({ep_labels}) — ${shown}, peak {c['est_peak_context']:,}{mark}")
+        many = p["n_chunks"] > 1
+        print((f"위 {p['n_chunks']}개 그룹을 각각 **새 독립 세션**으로 돌리세요"
+               if many else "위 그룹을 **새 독립 세션**으로 돌리세요")
+              + " — 세션을 이어가면 비용이 2차로 돌아갑니다. "
+              f"예상 총 ${p['total_cost_usd']}"
+              + (" (병렬 cache_write 할증 5% 포함)" if args.parallel else "")
+              + (f", 예측구간 ${interval[0]:,.0f}~${interval[1]:,.0f}" if interval else "")
+              + ".")
     print(f"report: {out/'kn-report.md'}\nplan:   {out/'kn-plan.json'}")
 
 

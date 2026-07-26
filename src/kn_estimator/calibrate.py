@@ -2,12 +2,12 @@
 
 셀(모드×모델)별 관측 가능량만 추출 (설계 v2.1):
   S0(첫 턴 컨텍스트), tau/delta/out의 env(1회 고정분)·ep(한계분) 분해,
-  latency(초/턴), out_rate(출력토큰/초), 실측 run 비용 목록(분산 폭).
+  latency(초/턴), 실측 run 비용 목록(분산 폭).
 
 env/ep 분해는 N이 2종 이상인 셀에서 2점 fit으로, 단일 N 셀은 flat/opus의
 env:ep 비율을 차용(approx 플래그). 가격표·캐시 배수는 버전과 함께 동봉.
 """
-import argparse, json, statistics
+import argparse, json, statistics, sys
 from pathlib import Path
 
 ARM_TO_CELL = {"flat": ("flat", "opus"), "flat_sonnet": ("flat", "sonnet"),
@@ -42,17 +42,28 @@ def calibrate(ledger_path, runs_dir, include=None, min_runs=2):
     rows = [json.loads(l) for l in Path(ledger_path).read_text().splitlines()]
     # 게이트 통과 run만 — 실패 run은 조기 종료로 비용이 과소해 계수를 오염시킨다.
     # 사후 재판정(측정 인프라 위양성)된 run은 gate-adjudications.json으로 구제.
+    # 걸러진 사유는 셀별로 집계한다 — 셀의 run이 전부 걸러지면(캠페인 실측: haiku
+    # 게이트 0/6) 그 셀은 groups에 아예 없어, 집계 없이는 무플래그로 사라진다.
     adj_path = Path(ledger_path).parent / "gate-adjudications.json"
     adjudicated = set(json.loads(adj_path.read_text())["adjudicated_pass"]) if adj_path.exists() else set()
-    rows = [r for r in rows if r.get("rep") != 99 and r["role"] == "run_total"
-            and r["variant"] in ARM_TO_CELL
-            and (r.get("gate") == "pass" or r["run_id"] in adjudicated)
-            and (include is None or include(r))]
     per_run = {}
+    dropped = {}   # cell key -> {"gate_fail": n, "missing_transcript": n, "usable": n}
     for r in rows:
+        if (r.get("rep") == 99 or r["role"] != "run_total"
+                or r["variant"] not in ARM_TO_CELL
+                or (include is not None and not include(r))):
+            continue
+        key = "/".join(ARM_TO_CELL[r["variant"]])
+        cnt = dropped.setdefault(key, {"gate_fail": 0, "missing_transcript": 0,
+                                       "usable": 0})
+        if not (r.get("gate") == "pass" or r["run_id"] in adjudicated):
+            cnt["gate_fail"] += 1
+            continue
         tr = Path(runs_dir) / r["run_id"] / "transcript.jsonl"
         if not tr.exists():
+            cnt["missing_transcript"] += 1
             continue
+        cnt["usable"] += 1
         turns, s0, cmax = _turn_stats(tr)
         per_run[r["run_id"]] = {"cell": ARM_TO_CELL[r["variant"]], "n": r["n"],
                                 "turns": turns, "s0": s0, "cmax": cmax,
@@ -87,15 +98,23 @@ def calibrate(ledger_path, runs_dir, include=None, min_runs=2):
 
     ref = two_point(groups.get(("flat", "opus"), []))
 
+    # 산출에서 빠지는 셀은 사유와 함께 기록한다 — 무플래그 drop은 하류에서 원인 불명의
+    # insufficient_calibration으로만 보인다 (2026-07-26 감사 #5).
+    skipped = {}
     for cell, runs in groups.items():
+        key = "/".join(cell)
         if len(runs) < min_runs:
-            continue  # 표본 부족 셀은 insufficient_calibration으로 처리됨
+            m = dropped.get(key, {}).get("missing_transcript", 0)
+            extra = f", missing_transcript={m}" if m else ""
+            skipped[key] = f"insufficient_runs({len(runs)}<{min_runs}{extra})"
+            continue
         s0 = med([r["s0"] for r in runs])
         tp = two_point(runs)
         approx = False
         if tp is None:
             # 단일 N 셀: flat/opus의 env:ep 비율 차용
             if ref is None:
+                skipped[key] = "single_n_without_reference_cell(flat/opus)"
                 continue
             n = runs[0]["n"]
             def split(total, env_ref, ep_ref):
@@ -108,20 +127,26 @@ def calibrate(ledger_path, runs_dir, include=None, min_runs=2):
             approx = True
         else:
             d_env, d_ep, t_env, t_ep, o_env, o_ep = tp
-        total_turns = med([r["turns"] for r in runs])
         # run 분산 밴드용 실측 비용은 셀의 최대 N(전체 규모 지점)에서 취한다.
         # 구 구현은 n == 8 리터럴이었다 — SmartPlant(최대 N=8) 전제가 새어나온 것으로,
         # 최대 N이 다른 프로젝트에서 빈 배열이 되어 밴드가 기본값으로 조용히 퇴화했다.
         max_n = max(r["n"] for r in runs)
-        cells["/".join(cell)] = {
+        cells[key] = {
             "S0": s0, "delta_env": d_env, "delta_ep": d_ep,
             "tau_env": t_env, "tau_ep": t_ep, "out_env": o_env, "out_ep": o_ep,
             "latency_s_per_turn": med([r["wall"] / max(r["turns"], 1) for r in runs]),
             "measured_costs": sorted(round(r["cost"], 2) for r in runs if r["n"] == max_n),
             "n_runs": len(runs), "env_split_approx": approx,
         }
+    # 사용 가능 run이 0인 셀(게이트 전멸·트랜스크립트 전멸)은 groups에 없다 — 여기서 기록.
+    # 원장에 variant 자체가 없는 셀은 기록하지 않는다 (의도된 미실험인지 알 수 없다).
+    for key, cnt in dropped.items():
+        if key in cells or key in skipped or cnt["usable"] > 0:
+            continue
+        parts = [f"{k}={v}" for k, v in cnt.items() if k != "usable" and v]
+        skipped[key] = f"no_usable_runs({', '.join(parts)})"
     return {"version": "kn-cal-1", "source": str(ledger_path), "pricing": PRICING,
-            "alpha_default": 0.5, "cells": cells}
+            "alpha_default": 0.5, "cells": cells, "skipped_cells": skipped}
 
 
 def main(argv=None):
@@ -136,6 +161,8 @@ def main(argv=None):
     ap.add_argument("--out", type=Path, help="출력 경로 (생략 시 stdout)")
     args = ap.parse_args(argv)
     cal = calibrate(args.ledger, args.runs)
+    for cell, why in cal["skipped_cells"].items():
+        print(f"경고: 셀 {cell} 제외 — {why}", file=sys.stderr)
     text = json.dumps(cal, indent=1, ensure_ascii=False)
     if args.out:
         args.out.write_text(text)
