@@ -122,6 +122,28 @@ def build_plan(slices, cal, mode="template", mdl="sonnet",
     return best
 
 
+def cost_coefficients(cal, mode, mdl):
+    """비용 곡선 C(K) = a + b·K + c·K² 의 계수 — 균일 ŵ=1에서 simulate_chunk의
+    닫힌 형태 합성 (단일 청크, USD).
+
+    a: 청크당 고정비 (지침 적재·환경분석의 가격 가중합)
+    b: EP당 한계비용 (프리픽스 재읽기 + δ 기록 + 산출 토큰)
+    c: 컨텍스트 누적 항 (i번째 EP가 앞선 i-1개의 잔류를 지고 읽는 비용)"""
+    cell = cal["cells"].get(f"{mode}/{mdl}")
+    if cell is None:
+        return None
+    p = cal["pricing"][mdl]
+    p_cr = p["input"] * cal["pricing"]["cache_read_mult"] / 1e6
+    p_cw = p["input"] * cal["pricing"]["cache_write_mult"] / 1e6
+    p_out = p["output"] / 1e6
+    env = cell["S0"] + cell["delta_env"]
+    return {"a": (p_cr * cell["tau_env"] * (cell["S0"] + cell["delta_env"] / 2)
+                  + p_cw * env + p_out * cell["out_env"]),
+            "b": (p_cr * cell["tau_ep"] * env + p_cw * cell["delta_ep"]
+                  + p_out * cell["out_ep"]),
+            "c": p_cr * cell["tau_ep"] * cell["delta_ep"] / 2}
+
+
 def k_stars(cal, mode, mdl, w_soft=W_SOFT_DEFAULT):
     """설계 v2.3의 K* 병기: K*_wall(평균 w 기준, W_soft 용량이 허용하는 최대 K)과
     K*_cost(단일 청크 단가 C(K)/K가 최소인 K). 실제 파티션은 컨트롤러 경계·δ̂ 기반
@@ -138,16 +160,10 @@ def k_stars(cal, mode, mdl, w_soft=W_SOFT_DEFAULT):
     # 낼 수 있다 (모든 run의 cmax == s0) — 나눗셈 가드.
     k_wall = max(int((w_soft - cell["S0"] - cell["delta_env"])
                      // max(cell["delta_ep"], 1)), 1)
-    p = cal["pricing"][mdl]
-    p_cr = p["input"] * cal["pricing"]["cache_read_mult"] / 1e6
-    p_cw = p["input"] * cal["pricing"]["cache_write_mult"] / 1e6
-    env_fixed = (p_cr * cell["tau_env"] * (cell["S0"] + cell["delta_env"] / 2)
-                 + p_cw * (cell["S0"] + cell["delta_env"])
-                 + p["output"] / 1e6 * cell["out_env"])
-    quad = p_cr * cell["tau_ep"] * cell["delta_ep"] / 2
-    if quad <= 0:   # 2차 항 없음 → g 단조 감소 → 벽까지 키우는 게 최적
+    co = cost_coefficients(cal, mode, mdl)
+    if co["c"] <= 0:   # 2차 항 없음 → g 단조 감소 → 벽까지 키우는 게 최적
         return {"k_cost": k_wall, "k_wall": k_wall}
-    k0 = round((env_fixed / quad) ** 0.5)
+    k0 = round((co["a"] / co["c"]) ** 0.5)
     # 이산 최적은 floor/ceil 중 하나 — 후보를 simulate로 평가해 반올림 오차 방어
     cands = {min(max(k, 1), k_wall) for k in (k0 - 1, k0, k0 + 1)}
     k_cost = min(cands, key=lambda k: model.simulate_chunk(
