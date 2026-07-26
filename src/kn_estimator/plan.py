@@ -104,7 +104,9 @@ def build_plan(slices, cal, mode="template", mdl="sonnet",
         # 모든 W_target frac에서 어떤 청크의 peak_context가 w_hard를 넘었다. 크래시 대신
         # 상태를 돌려준다. 처방은 병목에 따라 갈린다 — 모델 캡이 병목이면 --w-hard
         # 상향은 no-op이므로 그 권고를 내면 사용자가 막다른 길을 돈다.
-        if w_hard < requested_w_hard:
+        # 병목 판정은 "요청값이 캡 이상인가"다 — 캡과 같은 값을 명시한 경우도
+        # 상향은 no-op이므로 (w_hard < requested 비교로는 이 경계가 새어나간다).
+        if requested_w_hard >= model_w_hard(mdl):
             advice = (f"유효 w_hard는 모델 윈도우 캡({w_hard:,})이라 --w-hard 상향은 "
                       "무효다 — 컨텍스트 윈도우가 더 큰 모델을 지정하라.")
         else:
@@ -123,23 +125,31 @@ def build_plan(slices, cal, mode="template", mdl="sonnet",
 def k_stars(cal, mode, mdl, w_soft=W_SOFT_DEFAULT):
     """설계 v2.3의 K* 병기: K*_wall(평균 w 기준, W_soft 용량이 허용하는 최대 K)과
     K*_cost(단일 청크 단가 C(K)/K가 최소인 K). 실제 파티션은 컨트롤러 경계·δ̂ 기반
-    FFD라 평균 K가 이와 다를 수 있다 — 보고서 참고용 지표다."""
+    FFD라 평균 K가 이와 다를 수 있다 — 보고서 참고용 지표다.
+
+    K*_cost는 닫힌 형태로 구한다: 균일 ŵ=1에서 simulate_chunk의 비용은
+    cost(K) = A + B·K + C·K² (A: env 고정분의 가격 가중합, C = P_cr·tau_ep·delta_ep/2)
+    이므로 단가 g(K) = A/K + B + C·K의 최소는 K* = √(A/C)다 — 탐색 루프가 없어
+    퇴화 계수(delta_ep→0, k_wall 수만)에서도 절단·폭주가 없다."""
     cell = cal["cells"].get(f"{mode}/{mdl}")
     if cell is None:
         return None
     # delta_ep는 two_point 경로에서 최소 1로 클램프되지만, 단일 N approx 경로는 0을
     # 낼 수 있다 (모든 run의 cmax == s0) — 나눗셈 가드.
-    delta_ep = max(cell["delta_ep"], 1)
-    k_wall = max(int((w_soft - cell["S0"] - cell["delta_env"]) // delta_ep), 1)
-    best_k, best_g, worse = 1, None, 0
-    # 탐색 상한: 정상 계수에서는 단봉이라 조기 종료되지만, 퇴화 계수(delta_ep≈0)는
-    # g가 단조 감소해 k_wall(수만)까지 돌 수 있다 — O(K²) 폭주 방지 캡.
-    for k in range(1, min(k_wall, 500) + 1):
-        g = model.simulate_chunk(cal, mode, mdl, [1.0] * k)["cost_usd"] / k
-        if best_g is None or g < best_g:
-            best_k, best_g, worse = k, g, 0
-        else:
-            worse += 1
-            if worse >= 2:   # g(K) = a/K + b + cK 단봉 — 연속 악화 시 종료
-                break
-    return {"k_cost": best_k, "k_wall": k_wall}
+    k_wall = max(int((w_soft - cell["S0"] - cell["delta_env"])
+                     // max(cell["delta_ep"], 1)), 1)
+    p = cal["pricing"][mdl]
+    p_cr = p["input"] * cal["pricing"]["cache_read_mult"] / 1e6
+    p_cw = p["input"] * cal["pricing"]["cache_write_mult"] / 1e6
+    env_fixed = (p_cr * cell["tau_env"] * (cell["S0"] + cell["delta_env"] / 2)
+                 + p_cw * (cell["S0"] + cell["delta_env"])
+                 + p["output"] / 1e6 * cell["out_env"])
+    quad = p_cr * cell["tau_ep"] * cell["delta_ep"] / 2
+    if quad <= 0:   # 2차 항 없음 → g 단조 감소 → 벽까지 키우는 게 최적
+        return {"k_cost": k_wall, "k_wall": k_wall}
+    k0 = round((env_fixed / quad) ** 0.5)
+    # 이산 최적은 floor/ceil 중 하나 — 후보를 simulate로 평가해 반올림 오차 방어
+    cands = {min(max(k, 1), k_wall) for k in (k0 - 1, k0, k0 + 1)}
+    k_cost = min(cands, key=lambda k: model.simulate_chunk(
+        cal, mode, mdl, [1.0] * k)["cost_usd"] / k)
+    return {"k_cost": k_cost, "k_wall": k_wall}

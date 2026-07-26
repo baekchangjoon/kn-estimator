@@ -153,7 +153,12 @@ def main():
     tertiles = ws[n // 3], ws[2 * n // 3]
     unresolved = sum(1 for s in sls if s["unresolved"])
 
-    warn = _env_wall_warning(cal, args.mode, args.model, w_soft)
+    # 선택 셀의 유효 벽 = build_plan이 실제로 쓰는 값 (모델 윈도우 캡 반영).
+    # 경고·K*·보고서가 이 값을 공유해야 한다 — 요청값을 그대로 쓰면 haiku에
+    # soft 벽이 hard 벽보다 큰 자기모순 보고서가 나온다.
+    eff_soft = min(w_soft, args.w_hard, plan_mod.model_w_hard(args.model))
+
+    warn = _env_wall_warning(cal, args.mode, args.model, eff_soft)
     if warn:
         print(warn)
 
@@ -164,9 +169,9 @@ def main():
         print(f"{p['status']}: {p.get('reason') or why or ''}")
         sys.exit(1)
 
-    interval = _plan_interval(cal, args.mode, args.model, sls, p, w_soft,
+    interval = _plan_interval(cal, args.mode, args.model, sls, p, p["w_soft"],
                               parallel=args.parallel)
-    k_star = plan_mod.k_stars(cal, args.mode, args.model, w_soft)
+    k_star = plan_mod.k_stars(cal, args.mode, args.model, p["w_soft"])
 
     matrix = build_matrix(sls, cal, args.w_hard, w_soft, args.parallel)
 
@@ -195,11 +200,12 @@ def main():
         (f"- **예측구간: ${interval[0]:,.0f} ~ ${interval[1]:,.0f}**"
          " — 이 파티션의 α 민감도 × 실측 run 분산. 점추정보다 이 구간으로 해석할 것."
          if interval else "- 예측구간: 산출 불가 (캘리브레이션 부족)"),
-        f"- 벽: W_soft={w_soft:,} (품질 정책), W_hard={p['w_hard']:,} (모델 상한 반영)",
+        f"- 벽: W_soft={p['w_soft']:,} (품질 정책), W_hard={p['w_hard']:,} (모델 상한 반영)",
         (f"- K*_cost={k_star['k_cost']} (셀 단가 최소 K), K*_wall={k_star['k_wall']}"
          " (W_soft 용량 상한, 평균 w 기준) — 실제 파티션은 컨트롤러 경계·δ̂ 기반이라"
          " 평균 K와 다를 수 있다" if k_star else "- K*: 산출 불가 (캘리브레이션 부족)"),
-        f"- soft 초과 청크: {sum(1 for c in p['chunks'] if c['soft_exceeded'])}건", "",
+        f"- soft 초과 청크: {sum(1 for c in p['chunks'] if c['soft_exceeded'])}건"
+        + (f" (요청 W_soft={w_soft:,} → 유효값으로 캡됨)" if p["w_soft"] < w_soft else ""), "",
         "## 모드×모델 매트릭스 (동일 플랜 로직)", "",
         "| 구성 | 총비용 | 청크 수 | 평균 K | 벽시계 |", "|---|---|---|---|---|"]
     for key, v in matrix.items():

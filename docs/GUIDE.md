@@ -77,7 +77,9 @@ cache write 2.0x·read 0.1x — Claude Code 1h 캐시)이며 calibration.json에
   더 크게 줘도 모델 상한을 넘길 수 없다. 보고서·플랜의 `w_hard`는 캡 적용 후 유효값.
 - **W_soft** (기본 180K): 품질 정책 벽 — 실측에서 게이트 통과 세션의 종료 컨텍스트
   분포(p50)로 역산한 값. 초과 시 비용에 15% 패널티를 부과하고 보고서에 경고
-  (컴팩션·후반부 품질 저하 리스크). `--conservative`로 150K 프리셋.
+  (컴팩션·후반부 품질 저하 리스크). `--conservative`로 150K 프리셋. 유효 W_hard보다
+  크게 주면 유효 W_hard로 캡된다 (예: haiku에 `--w-soft 400000` → 180K로 재해석,
+  보고서에 캡 사실 표기).
 - 파티션 생성: 컨트롤러 단위로 묶고(같은 컨트롤러의 EP는 분석 컨텍스트를 공유하므로)
   → δ̂ 내림차순 First-Fit-Decreasing으로 용량(W_target) 빈에 배치 → W_target 그리드
   {0.4, 0.55, 0.7, 0.85, 1.0}×soft예산에서 **파티션 전체를 시뮬레이션해 총비용이
@@ -172,7 +174,7 @@ kn-estimate /path/to/your-spring-project \
 | `--mode` | template | 생성 방식: `template`(spec→렌더러) / `flat`(직접 저작) |
 | `--model` | sonnet | opus / sonnet / haiku (미캘리브레이션 셀은 수치 미제공) |
 | `--calibration` | 내장 실측 | calibration.json 경로 (자체 실측으로 교체 가능) |
-| `--w-soft` | 180000 | 품질 정책 벽 (초과 시 패널티+경고) |
+| `--w-soft` | 180000 | 품질 정책 벽 (초과 시 패널티+경고, 유효 W_hard로 캡) |
 | `--w-hard` | 900000 | 모델 상한 벽 (위반 불가, 모델별 윈도우×0.9로 자동 캡) |
 | `--conservative` | off | W_soft=150K 보수 프리셋 |
 | `--parallel` | off | 청크 병렬 실행 가정 (벽시계=max, cache_write 할증) |
