@@ -97,6 +97,31 @@ def _env_wall_warning(cal, mode, mdl, w_soft):
     return None
 
 
+def build_matrix(sls, cal, w_soft, w_hard, parallel=False):
+    """모드×모델 매트릭스 — 권장 플랜과 **같은 실행 가정**(parallel 포함)으로 계산한다.
+
+    parallel을 전달하지 않으면 권장 플랜(1.05× 할증)과 매트릭스의 동일 셀 총액이
+    어긋난다 (2026-07-26 감사 #7)."""
+    matrix = {}
+    for mode in ("flat", "template"):
+        for mdl in ("opus", "sonnet", "haiku"):
+            key = f"{mode}/{mdl}"
+            if key not in cal["cells"]:
+                matrix[key] = "insufficient_calibration"
+                continue
+            pm = plan_mod.build_plan(sls, cal, mode=mode, mdl=mdl,
+                                     w_hard=w_hard, w_soft=w_soft, parallel=parallel)
+            if pm.get("status"):
+                # 선택 셀이 아니어도 벽을 못 맞추는 셀이 있을 수 있다 (예: 작은 --w-hard에서
+                # flat/sonnet). 크래시 대신 상태를 표기한다.
+                matrix[key] = pm["status"]
+                continue
+            matrix[key] = {"total_cost_usd": pm["total_cost_usd"],
+                           "n_chunks": pm["n_chunks"], "k_avg": pm["k_avg"],
+                           "wall_h": round(pm["total_wall_s"] / 3600, 1)}
+    return matrix
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("project_root")
@@ -133,30 +158,16 @@ def main():
         sys.exit(1)
 
     interval = _plan_interval(cal, args.mode, args.model, sls, p, w_soft)
+    k_star = plan_mod.k_stars(cal, args.mode, args.model, w_soft)
 
-    matrix = {}
-    for mode in ("flat", "template"):
-        for mdl in ("opus", "sonnet", "haiku"):
-            key = f"{mode}/{mdl}"
-            if key not in cal["cells"]:
-                matrix[key] = "insufficient_calibration"
-                continue
-            pm = plan_mod.build_plan(sls, cal, mode=mode, mdl=mdl,
-                                     w_hard=args.w_hard, w_soft=w_soft)
-            if pm.get("status"):
-                # 선택 셀이 아니어도 벽을 못 맞추는 셀이 있을 수 있다 (예: 작은 --w-hard에서
-                # flat/sonnet). 크래시 대신 상태를 표기한다.
-                matrix[key] = pm["status"]
-                continue
-            matrix[key] = {"total_cost_usd": pm["total_cost_usd"],
-                           "n_chunks": pm["n_chunks"], "k_avg": pm["k_avg"],
-                           "wall_h": round(pm["total_wall_s"] / 3600, 1)}
+    matrix = build_matrix(sls, cal, w_soft, args.w_hard, args.parallel)
 
     out = Path(args.project_root) / args.out_dir
     out.mkdir(parents=True, exist_ok=True)
     plan_json = {**{k: v for k, v in p.items() if k != "chunks"},
                  "chunks": [{**c, "endpoints": [f"{s['endpoint']['method']} {s['endpoint']['path']}"
                                                  for s in c["endpoints"]]} for c in p["chunks"]],
+                 "k_star": k_star,
                  "calibration_version": cal["version"]}
     (out / "kn-plan.json").write_text(json.dumps(plan_json, indent=2, ensure_ascii=False))
 
@@ -176,7 +187,10 @@ def main():
         (f"- **예측구간: ${interval[0]:,.0f} ~ ${interval[1]:,.0f}**"
          " — 이 파티션의 α 민감도 × 실측 run 분산. 점추정보다 이 구간으로 해석할 것."
          if interval else "- 예측구간: 산출 불가 (캘리브레이션 부족)"),
-        f"- 벽: W_soft={w_soft:,} (품질 정책), W_hard={args.w_hard:,} (모델 상한)",
+        f"- 벽: W_soft={w_soft:,} (품질 정책), W_hard={p['w_hard']:,} (모델 상한 반영)",
+        (f"- K*_cost={k_star['k_cost']} (셀 단가 최소 K), K*_wall={k_star['k_wall']}"
+         " (W_soft 용량 상한, 평균 w 기준) — 실제 파티션은 컨트롤러 경계·δ̂ 기반이라"
+         " 평균 K와 다를 수 있다" if k_star else "- K*: 산출 불가 (캘리브레이션 부족)"),
         f"- soft 초과 청크: {sum(1 for c in p['chunks'] if c['soft_exceeded'])}건", "",
         "## 모드×모델 매트릭스 (동일 플랜 로직)", "",
         "| 구성 | 총비용 | 청크 수 | 평균 K | 벽시계 |", "|---|---|---|---|---|"]
