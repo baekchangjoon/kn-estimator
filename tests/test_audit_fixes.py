@@ -67,6 +67,11 @@ def test_infeasible_reason_distinguishes_user_limit_from_model_cap():
     assert "올리거나" not in p_cap["reason"]
     assert "무효" in p_cap["reason"]
     assert p_cap["requested_w_hard"] == 900_000
+    # 경계: 사용자가 캡과 같은 값을 명시해도 병목은 모델 캡 — 상향 권고는 no-op이다
+    p_eq = plan.build_plan(_slices(4), tiny, mode="template", mdl="haiku",
+                           w_soft=500_000, w_hard=180_000)
+    assert p_eq["status"] == "infeasible_w_hard"
+    assert "올리거나" not in p_eq["reason"], p_eq["reason"]
 
 
 def test_w_hard_default_unchanged_for_1m_window_models():
@@ -258,10 +263,55 @@ def test_k_stars_reports_cost_and_wall_optima():
     assert ks["k_cost"] == brute
     # 미캘리브레이션 셀은 None
     assert plan.k_stars(cal, "flat", "haiku", w_soft=180_000) is None
-    # 퇴화 계수(delta_ep=0, 단일 N approx 경로에서 가능)에도 죽지 않는다
+    # 퇴화 계수(delta_ep=0, 단일 N approx 경로에서 가능): g가 단조 감소하므로
+    # k_cost는 k_wall이어야 한다 (죽지도, 임의 상한에서 절단하지도 않는다)
     degen = {**cal, "cells": {"template/sonnet": {**cal["cells"]["template/sonnet"],
                                                   "delta_ep": 0.0}}}
-    assert plan.k_stars(degen, "template", "sonnet", w_soft=180_000)["k_wall"] >= 1
+    ks_d = plan.k_stars(degen, "template", "sonnet", w_soft=180_000)
+    assert ks_d["k_cost"] == ks_d["k_wall"]
+
+
+def test_k_cost_is_exact_even_when_optimum_is_deep():
+    """calibrate의 max(ep,1) 클램프는 delta_ep=1 셀을 실제로 만든다(컨텍스트 미성장
+    run). 그때 k_wall이 수천이 되는데, 탐색을 임의 상한에서 절단해 틀린 K*를 조용히
+    보고하면 안 된다 — 닫힌 형태 최적값과 브루트포스가 일치해야 한다."""
+    from kn_estimator import model
+    cal = _cal()
+    cell = {**cal["cells"]["template/sonnet"], "delta_ep": 30.0, "tau_ep": 1.0}
+    deep = {**cal, "cells": {"template/sonnet": cell}}
+    ks = plan.k_stars(deep, "template", "sonnet", w_soft=180_000)
+    assert ks["k_wall"] > 500 and ks["k_cost"] > 500   # 최적점이 구 500 캡 너머
+    brute = min(range(1, ks["k_wall"] + 1),
+                key=lambda k: model.simulate_chunk(
+                    deep, "template", "sonnet", [1.0] * k)["cost_usd"] / k)
+    assert ks["k_cost"] == brute, (ks, brute)
+
+
+def test_report_shows_effective_walls_not_requested(tmp_path, monkeypatch):
+    """N1: 보고서·플랜의 벽 표시는 build_plan이 실제로 쓴 유효값이어야 한다 —
+    haiku에 --w-soft 400000을 주면 유효 W_soft는 180K인데 400,000을 인쇄하면
+    soft 벽이 hard 벽보다 큰 자기모순 보고서가 나온다."""
+    root = _project(tmp_path, {
+        "src/main/java/com/x/PingController.java": """\
+            package com.x;
+
+            @RestController
+            public class PingController {
+                @GetMapping("/ping")
+                public ResponseEntity<String> ping() { return ResponseEntity.ok("pong"); }
+            }
+        """})
+    monkeypatch.setattr(sys, "argv",
+                        ["kn-estimate", root, "--mode", "template", "--model", "haiku",
+                         "--w-soft", "400000"])
+    cli.main()
+    report = (Path(root) / ".kn" / "kn-report.md").read_text()
+    wall_line = next(l for l in report.splitlines() if l.startswith("- 벽:"))
+    assert "W_soft=180,000" in wall_line, wall_line
+    assert "W_soft=400,000" not in wall_line
+    assert "캡" in report   # 요청값과 다르면 캡 사실을 고지한다
+    pj = json.loads((Path(root) / ".kn" / "kn-plan.json").read_text())
+    assert pj["w_soft"] <= pj["w_hard"] == 180_000
 
 
 def test_report_includes_k_star_line(tmp_path, monkeypatch):
