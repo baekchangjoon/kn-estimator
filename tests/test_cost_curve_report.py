@@ -9,7 +9,6 @@ import json
 import sys
 import textwrap
 from importlib import resources
-from pathlib import Path
 
 from kn_estimator import cli, model, plan
 
@@ -70,7 +69,8 @@ def test_report_expresses_cost_curve_and_controller_units(tmp_path, monkeypatch)
     report = (tmp_path / ".kn" / "kn-report.md").read_text()
     assert "비용 곡선" in report
     co = plan.cost_coefficients(_cal(), "template", "sonnet")
-    assert f"{co['a']:.2f}" in report and f"{co['c']:.4f}" in report
+    assert f"{co['a']:.2f}" in report and f"{co['b']:.3f}" in report \
+        and f"{co['c']:.4f}" in report
     assert "## 컨트롤러 단위" in report
     assert "AlphaController" in report and "BetaController" in report
 

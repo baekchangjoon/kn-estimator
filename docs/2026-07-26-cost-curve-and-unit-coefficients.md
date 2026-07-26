@@ -63,8 +63,10 @@ c = P_cr·τ_ep·δ_ep/2                                             (컨텍스�
 | petclinic/δ | 0.520 | 1.44 | 4 | 8 | 0.341 |
 | auth-user/out | 0.153 | 0.18 | 3 | 5 | 0.800 |
 | auth-user/δ | 0.628 | 0.84 | 3 | 4 | 0.498 |
-| community/out·δ | — | — | 1 | 5 | 검정 불가 (컨트롤러 1개) |
-| smartplant/out·δ | — | — | 8 | 8 | 검정 불가 (컨트롤러당 EP 1개) |
+| community/out | — | — | 1 | 5 | 검정 불가 (컨트롤러 1개) |
+| community/δ | — | — | 1 | 4 | 검정 불가 (컨트롤러 1개) |
+| smartplant/out | — | — | 8 | 8 | 검정 불가 (컨트롤러당 EP 1개) |
+| smartplant/δ | — | — | 7 | 7 | 검정 불가 (컨트롤러당 EP 1개, 첫 Write는 δ 미정의) |
 
 **해석:**
 
@@ -94,6 +96,7 @@ c = P_cr·τ_ep·δ_ep/2                                             (컨텍스�
 ## 5. 재현
 
 ```bash
+# 패키지 미설치 환경이면 PYTHONPATH=src 를 앞에 붙인다
 python research/unit_variance.py \
   --repo petclinic=<spring-petclinic 경로> \
   --repo auth-user=<tainted-spring-auth-user 경로> \
