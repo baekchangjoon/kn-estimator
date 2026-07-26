@@ -42,17 +42,28 @@ def calibrate(ledger_path, runs_dir, include=None, min_runs=2):
     rows = [json.loads(l) for l in Path(ledger_path).read_text().splitlines()]
     # 게이트 통과 run만 — 실패 run은 조기 종료로 비용이 과소해 계수를 오염시킨다.
     # 사후 재판정(측정 인프라 위양성)된 run은 gate-adjudications.json으로 구제.
+    # 걸러진 사유는 셀별로 집계한다 — 셀의 run이 전부 걸러지면(캠페인 실측: haiku
+    # 게이트 0/6) 그 셀은 groups에 아예 없어, 집계 없이는 무플래그로 사라진다.
     adj_path = Path(ledger_path).parent / "gate-adjudications.json"
     adjudicated = set(json.loads(adj_path.read_text())["adjudicated_pass"]) if adj_path.exists() else set()
-    rows = [r for r in rows if r.get("rep") != 99 and r["role"] == "run_total"
-            and r["variant"] in ARM_TO_CELL
-            and (r.get("gate") == "pass" or r["run_id"] in adjudicated)
-            and (include is None or include(r))]
     per_run = {}
+    dropped = {}   # cell key -> {"gate_fail": n, "missing_transcript": n, "usable": n}
     for r in rows:
+        if (r.get("rep") == 99 or r["role"] != "run_total"
+                or r["variant"] not in ARM_TO_CELL
+                or (include is not None and not include(r))):
+            continue
+        key = "/".join(ARM_TO_CELL[r["variant"]])
+        cnt = dropped.setdefault(key, {"gate_fail": 0, "missing_transcript": 0,
+                                       "usable": 0})
+        if not (r.get("gate") == "pass" or r["run_id"] in adjudicated):
+            cnt["gate_fail"] += 1
+            continue
         tr = Path(runs_dir) / r["run_id"] / "transcript.jsonl"
         if not tr.exists():
+            cnt["missing_transcript"] += 1
             continue
+        cnt["usable"] += 1
         turns, s0, cmax = _turn_stats(tr)
         per_run[r["run_id"]] = {"cell": ARM_TO_CELL[r["variant"]], "n": r["n"],
                                 "turns": turns, "s0": s0, "cmax": cmax,
@@ -93,7 +104,9 @@ def calibrate(ledger_path, runs_dir, include=None, min_runs=2):
     for cell, runs in groups.items():
         key = "/".join(cell)
         if len(runs) < min_runs:
-            skipped[key] = f"insufficient_runs({len(runs)}<{min_runs})"
+            m = dropped.get(key, {}).get("missing_transcript", 0)
+            extra = f", missing_transcript={m}" if m else ""
+            skipped[key] = f"insufficient_runs({len(runs)}<{min_runs}{extra})"
             continue
         s0 = med([r["s0"] for r in runs])
         tp = two_point(runs)
@@ -125,6 +138,13 @@ def calibrate(ledger_path, runs_dir, include=None, min_runs=2):
             "measured_costs": sorted(round(r["cost"], 2) for r in runs if r["n"] == max_n),
             "n_runs": len(runs), "env_split_approx": approx,
         }
+    # 사용 가능 run이 0인 셀(게이트 전멸·트랜스크립트 전멸)은 groups에 없다 — 여기서 기록.
+    # 원장에 variant 자체가 없는 셀은 기록하지 않는다 (의도된 미실험인지 알 수 없다).
+    for key, cnt in dropped.items():
+        if key in cells or key in skipped or cnt["usable"] > 0:
+            continue
+        parts = [f"{k}={v}" for k, v in cnt.items() if k != "usable" and v]
+        skipped[key] = f"no_usable_runs({', '.join(parts)})"
     return {"version": "kn-cal-1", "source": str(ledger_path), "pricing": PRICING,
             "alpha_default": 0.5, "cells": cells, "skipped_cells": skipped}
 

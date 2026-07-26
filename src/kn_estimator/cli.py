@@ -47,7 +47,7 @@ def load_calibration(path=None):
     return cal
 
 
-def _plan_interval(cal, mode, mdl, slices, p, w_soft):
+def _plan_interval(cal, mode, mdl, slices, p, w_soft, parallel=False):
     """플랜 총액의 예측구간 (low, high).
 
     α 민감도는 **선택된 파티션 위에서** 재시뮬레이션해 구한다. `estimate_cell`의 비율을
@@ -70,6 +70,8 @@ def _plan_interval(cal, mode, mdl, slices, p, w_soft):
                 return None
             # build_plan과 동일한 누적 규칙 (soft 초과 패널티 포함)
             total += sim["cost_usd"] * (1.15 if sim["peak_context"] > w_soft else 1.0)
+        if parallel:   # build_plan과 동일한 병렬 할증 — 총액과 구간의 실행 가정 일치
+            total *= 1.05
         totals[alpha] = total
     base = p["total_cost_usd"]
     lo_a, hi_a = min(totals.values()), max(totals.values())
@@ -97,7 +99,7 @@ def _env_wall_warning(cal, mode, mdl, w_soft):
     return None
 
 
-def build_matrix(sls, cal, w_soft, w_hard, parallel=False):
+def build_matrix(sls, cal, w_hard, w_soft, parallel=False):   # 인자 순서 = build_plan
     """모드×모델 매트릭스 — 권장 플랜과 **같은 실행 가정**(parallel 포함)으로 계산한다.
 
     parallel을 전달하지 않으면 권장 플랜(1.05× 할증)과 매트릭스의 동일 셀 총액이
@@ -107,7 +109,11 @@ def build_matrix(sls, cal, w_soft, w_hard, parallel=False):
         for mdl in ("opus", "sonnet", "haiku"):
             key = f"{mode}/{mdl}"
             if key not in cal["cells"]:
-                matrix[key] = "insufficient_calibration"
+                # 캘리브레이션이 스킵 사유를 남겼으면 병기 — 맨 라벨만 보이면
+                # 사용자가 원인(게이트 전멸/표본 부족/기준 셀 부재)을 알 수 없다.
+                why = (cal.get("skipped_cells") or {}).get(key)
+                matrix[key] = (f"insufficient_calibration ({why})" if why
+                               else "insufficient_calibration")
                 continue
             pm = plan_mod.build_plan(sls, cal, mode=mode, mdl=mdl,
                                      w_hard=w_hard, w_soft=w_soft, parallel=parallel)
@@ -154,13 +160,15 @@ def main():
     p = plan_mod.build_plan(sls, cal, mode=args.mode, mdl=args.model,
                             w_hard=args.w_hard, w_soft=w_soft, parallel=args.parallel)
     if p.get("status"):
-        print(f"{p['status']}: {p.get('reason', '')}")
+        why = (cal.get("skipped_cells") or {}).get(f"{args.mode}/{args.model}")
+        print(f"{p['status']}: {p.get('reason') or why or ''}")
         sys.exit(1)
 
-    interval = _plan_interval(cal, args.mode, args.model, sls, p, w_soft)
+    interval = _plan_interval(cal, args.mode, args.model, sls, p, w_soft,
+                              parallel=args.parallel)
     k_star = plan_mod.k_stars(cal, args.mode, args.model, w_soft)
 
-    matrix = build_matrix(sls, cal, w_soft, args.w_hard, args.parallel)
+    matrix = build_matrix(sls, cal, args.w_hard, w_soft, args.parallel)
 
     out = Path(args.project_root) / args.out_dir
     out.mkdir(parents=True, exist_ok=True)

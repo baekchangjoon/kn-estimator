@@ -105,5 +105,7 @@
    "env_split_approx": true
   }
  },
- "skipped_cells": {}
+ "skipped_cells": {
+  "flat/haiku": "no_usable_runs(gate_fail=3)"
+ }
 }
