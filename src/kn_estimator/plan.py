@@ -9,6 +9,16 @@ from . import model
 W_HARD_DEFAULT = 900_000     # 1M 윈도우 - 여유분
 W_SOFT_DEFAULT = 180_000     # 실측 flat N=8 종료 분포 p50 역산 (보수 프리셋: 150K)
 
+# 모델별 컨텍스트 윈도우. W_hard는 "모델 상한"이므로 사용자 값과 무관하게 이 상한을
+# 넘을 수 없다 — 단일 CLI 값(1M 전제)을 haiku(200K)에 그대로 쓰면 실행 가능성을
+# 과대평가한다 (2026-07-26 감사 #1).
+MODEL_CONTEXT_WINDOW = {"opus": 1_000_000, "sonnet": 1_000_000, "haiku": 200_000}
+W_HARD_WINDOW_FRACTION = 0.9   # 900_000 = 1M × 0.9 — 기존 기본값과 동일한 여유율
+
+
+def model_w_hard(mdl):
+    return int(MODEL_CONTEXT_WINDOW.get(mdl, 1_000_000) * W_HARD_WINDOW_FRACTION)
+
 
 def _controller_groups(slices):
     groups = {}
@@ -53,6 +63,7 @@ def build_plan(slices, cal, mode="template", mdl="sonnet",
     cell = cal["cells"].get(f"{mode}/{mdl}")
     if cell is None:
         return {"status": "insufficient_calibration", "mode": mode, "model": mdl}
+    w_hard = min(w_hard, model_w_hard(mdl))
     w_mean = sum(s["w_tokens"] for s in slices) / len(slices)
     delta_of = lambda s: _delta_hat(cal, mode, mdl, s, w_mean)
     groups = _controller_groups(slices)
@@ -96,3 +107,23 @@ def build_plan(slices, cal, mode="template", mdl="sonnet",
                  "parallel": parallel,
                  "k_avg": round(len(slices) / best["n_chunks"], 1)})
     return best
+
+
+def k_stars(cal, mode, mdl, w_soft=W_SOFT_DEFAULT):
+    """설계 v2.3의 K* 병기: K*_wall(평균 w 기준, W_soft 용량이 허용하는 최대 K)과
+    K*_cost(단일 청크 단가 C(K)/K가 최소인 K). 실제 파티션은 컨트롤러 경계·δ̂ 기반
+    FFD라 평균 K가 이와 다를 수 있다 — 보고서 참고용 지표다."""
+    cell = cal["cells"].get(f"{mode}/{mdl}")
+    if cell is None:
+        return None
+    k_wall = max(int((w_soft - cell["S0"] - cell["delta_env"]) // cell["delta_ep"]), 1)
+    best_k, best_g, worse = 1, None, 0
+    for k in range(1, k_wall + 1):
+        g = model.simulate_chunk(cal, mode, mdl, [1.0] * k)["cost_usd"] / k
+        if best_g is None or g < best_g:
+            best_k, best_g, worse = k, g, 0
+        else:
+            worse += 1
+            if worse >= 2:   # g(K) = a/K + b + cK 단봉 — 연속 악화 시 종료
+                break
+    return {"k_cost": best_k, "k_wall": k_wall}

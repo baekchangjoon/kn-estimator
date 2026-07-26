@@ -104,5 +104,6 @@
    "n_runs": 3,
    "env_split_approx": true
   }
- }
+ },
+ "skipped_cells": {}
 }

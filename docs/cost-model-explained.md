@@ -1,7 +1,9 @@
 # 비용 모델 해설 — 왜 2차인가, 왜 청크로 1차를 만드나, K는 왜 중요한가
 
-> kn-estimator([GUIDE](../tools/kn_estimator/GUIDE.md))의 수학적 토대를 그림과 함께
-> 설명한다. 모든 수치는 실측 43 run(`results/run_ledger.jsonl`)과 그 fit 계수에서 나왔다.
+> kn-estimator([GUIDE](GUIDE.md))의 수학적 토대를 설명한다. 모든 수치는 실측
+> 43 run(`../results/run_ledger.jsonl`)과 그 fit 계수에서 나왔다.
+> (본문이 참조하는 그림 1~3은 원 실험 저장소의 산출물로 이 저장소에는 동봉되지
+> 않았다 — 각 그림의 수치는 본문과 부록에 그대로 있다.)
 
 ---
 
@@ -18,7 +20,7 @@
 직관적으로는 "엔드포인트가 2배니 비용도 2배겠지"(선형)라고 기대하게 되지만,
 단일 LLM 세션은 그렇게 동작하지 않는다. 이유는 실측 그래프 한 장으로 보인다:
 
-![실측: 턴별 컨텍스트 누적](figures/fig1-context-growth.svg)
+*(그림 1: 턴별 컨텍스트 누적 실측 — 52K에서 시작해 83턴 뒤 257K. 미동봉, 수치는 부록 참조)*
 
 단일 세션에서 엔드포인트를 순서대로 처리하면 두 가지가 **동시에** 자란다:
 
@@ -46,7 +48,7 @@ flat×opus 실측 fit: a≈2.4, b≈0.8, c≈0.02).
 
 ## 2. 왜 2차를 1차로 만드나 — 청크드(chunked) 실행
 
-![단일 세션 vs 청크드 flat](figures/fig2-cost-curves.svg)
+*(그림 2: 단일 세션 2차 곡선 vs 청크드 계단 — 미동봉, 계수는 부록 참조)*
 
 - **빨간 곡선 (단일 세션)**: C(N) = a + bN + cN². N이 작을 때는 고정비 상각 덕에
   싸 보이지만, cN² 항이 반드시 역전한다 (이 계수 기준 교차점 N≈16). 게다가
@@ -68,7 +70,7 @@ flat×opus 실측 fit: a≈2.4, b≈0.8, c≈0.02).
 청크드 실행이 만드는 1차 직선의 기울기는 **엔드포인트당 단가 g(K) = C(K)/K**다.
 이 단가가 K에 대해 U자 곡선을 그린다:
 
-![단가 U-커브와 최적 K](figures/fig3-unit-cost.svg)
+*(그림 3: 단가 g(K) U-커브 — 미동봉, 계수는 부록 참조)*
 
 ```
 g(K) = C(K)/K = a/K + b + c·K
@@ -82,7 +84,9 @@ g(K) = C(K)/K = a/K + b + c·K
 - **K가 너무 크면** (곡선 오른쪽): 청크 내부의 2차 항이 커지고, 품질 리스크
   (컴팩션, 후반부 지침 망각 — 실측에서 게이트 실패가 세션 후반부에 몰렸다)가 얹힌다.
 - **최적점**: 두 힘이 균형하는 `K* = √(a/c)` ≈ 11. 품질 여유를 두면 **K=8~12**가
-  안전 권장 대역이다.
+  안전 권장 대역이다. (이 수치는 flat×opus 예시 계수 기준이다 — 도구는 셀별
+  캘리브레이션과 W_soft 용량으로 K를 다시 계산하므로, 보고서의 k_avg는 이 대역과
+  다를 수 있다. 예: 동봉 template×sonnet 계수에서는 k_avg≈2.8이 나온다.)
 
 즉 K는 "몇 개씩 묶느냐"라는 사소한 실행 옵션이 아니라, **전체 비용 직선의 기울기와
 품질 리스크를 동시에 결정하는 1차 설계 변수**다.
@@ -110,10 +114,10 @@ g(K) = C(K)/K = a/K + b + c·K
 
 ### 부록: 이 문서 수치의 출처
 
-- 그림 1: `results/runs/flat-n8-r1/transcript.jsonl`의 message.id dedup 턴별
-  (cache_read+input+cache_write) 실측.
+- 그림 1: `../results/runs/flat-n8-r1/transcript.jsonl`의 message.id dedup 턴별
+  (cache_read+input+cache_write) 실측 — 이 저장소에 동봉된 원자료로 재계산 가능하다.
 - 그림 2·3 계수: flat×opus N=1/N=8 각 3회 실측의 2점 fit (a=2.4, b=0.8, c=0.02).
   교차점·K*는 이 계수에 종속 — 프로젝트가 다르면 kn-estimator가 다시 계산한다.
-- 그림 생성 스크립트 팔레트는 CVD 검증 통과 (dataviz validator).
+- 그림 파일과 생성 스크립트는 원 실험 저장소에 있고 여기에는 동봉되지 않았다.
 - 상세 스케일링 분석: [scaling-analysis.md](scaling-analysis.md),
-  실측 전체: [final-report.md](../results/final-report.md).
+  실측 원장: `../results/run_ledger.jsonl` (원 실험의 final-report는 미동봉).

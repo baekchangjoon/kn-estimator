@@ -2,12 +2,12 @@
 
 셀(모드×모델)별 관측 가능량만 추출 (설계 v2.1):
   S0(첫 턴 컨텍스트), tau/delta/out의 env(1회 고정분)·ep(한계분) 분해,
-  latency(초/턴), out_rate(출력토큰/초), 실측 run 비용 목록(분산 폭).
+  latency(초/턴), 실측 run 비용 목록(분산 폭).
 
 env/ep 분해는 N이 2종 이상인 셀에서 2점 fit으로, 단일 N 셀은 flat/opus의
 env:ep 비율을 차용(approx 플래그). 가격표·캐시 배수는 버전과 함께 동봉.
 """
-import argparse, json, statistics
+import argparse, json, statistics, sys
 from pathlib import Path
 
 ARM_TO_CELL = {"flat": ("flat", "opus"), "flat_sonnet": ("flat", "sonnet"),
@@ -87,15 +87,21 @@ def calibrate(ledger_path, runs_dir, include=None, min_runs=2):
 
     ref = two_point(groups.get(("flat", "opus"), []))
 
+    # 산출에서 빠지는 셀은 사유와 함께 기록한다 — 무플래그 drop은 하류에서 원인 불명의
+    # insufficient_calibration으로만 보인다 (2026-07-26 감사 #5).
+    skipped = {}
     for cell, runs in groups.items():
+        key = "/".join(cell)
         if len(runs) < min_runs:
-            continue  # 표본 부족 셀은 insufficient_calibration으로 처리됨
+            skipped[key] = f"insufficient_runs({len(runs)}<{min_runs})"
+            continue
         s0 = med([r["s0"] for r in runs])
         tp = two_point(runs)
         approx = False
         if tp is None:
             # 단일 N 셀: flat/opus의 env:ep 비율 차용
             if ref is None:
+                skipped[key] = "single_n_without_reference_cell(flat/opus)"
                 continue
             n = runs[0]["n"]
             def split(total, env_ref, ep_ref):
@@ -108,12 +114,11 @@ def calibrate(ledger_path, runs_dir, include=None, min_runs=2):
             approx = True
         else:
             d_env, d_ep, t_env, t_ep, o_env, o_ep = tp
-        total_turns = med([r["turns"] for r in runs])
         # run 분산 밴드용 실측 비용은 셀의 최대 N(전체 규모 지점)에서 취한다.
         # 구 구현은 n == 8 리터럴이었다 — LegacySut(최대 N=8) 전제가 새어나온 것으로,
         # 최대 N이 다른 프로젝트에서 빈 배열이 되어 밴드가 기본값으로 조용히 퇴화했다.
         max_n = max(r["n"] for r in runs)
-        cells["/".join(cell)] = {
+        cells[key] = {
             "S0": s0, "delta_env": d_env, "delta_ep": d_ep,
             "tau_env": t_env, "tau_ep": t_ep, "out_env": o_env, "out_ep": o_ep,
             "latency_s_per_turn": med([r["wall"] / max(r["turns"], 1) for r in runs]),
@@ -121,7 +126,7 @@ def calibrate(ledger_path, runs_dir, include=None, min_runs=2):
             "n_runs": len(runs), "env_split_approx": approx,
         }
     return {"version": "kn-cal-1", "source": str(ledger_path), "pricing": PRICING,
-            "alpha_default": 0.5, "cells": cells}
+            "alpha_default": 0.5, "cells": cells, "skipped_cells": skipped}
 
 
 def main(argv=None):
@@ -136,6 +141,8 @@ def main(argv=None):
     ap.add_argument("--out", type=Path, help="출력 경로 (생략 시 stdout)")
     args = ap.parse_args(argv)
     cal = calibrate(args.ledger, args.runs)
+    for cell, why in cal["skipped_cells"].items():
+        print(f"경고: 셀 {cell} 제외 — {why}", file=sys.stderr)
     text = json.dumps(cal, indent=1, ensure_ascii=False)
     if args.out:
         args.out.write_text(text)
