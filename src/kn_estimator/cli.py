@@ -172,6 +172,20 @@ def main():
     interval = _plan_interval(cal, args.mode, args.model, sls, p, p["w_soft"],
                               parallel=args.parallel)
     k_star = plan_mod.k_stars(cal, args.mode, args.model, p["w_soft"])
+    curve = plan_mod.cost_coefficients(cal, args.mode, args.model)
+
+    # 컨트롤러 단위 요약: n(EP 수)·Σw·배정 청크. 단위별 a,b,c는 만들지 않는다 —
+    # 컨트롤러 소속의 분산 설명력 검정(research/unit_variance.py)에서 유의한 근거가
+    # 없었다 (전 케이스 순열 p≥0.079, 절반은 구조적으로 검정 불가).
+    controllers = {}
+    for i, c in enumerate(p["chunks"]):
+        for s in c["endpoints"]:
+            info = controllers.setdefault(s["endpoint"]["controller"],
+                                          {"n": 0, "w_tokens": 0, "chunks": []})
+            info["n"] += 1
+            info["w_tokens"] += s["w_tokens"]
+            if i not in info["chunks"]:
+                info["chunks"].append(i)
 
     matrix = build_matrix(sls, cal, args.w_hard, w_soft, args.parallel)
 
@@ -181,6 +195,8 @@ def main():
                  "chunks": [{**c, "endpoints": [f"{s['endpoint']['method']} {s['endpoint']['path']}"
                                                  for s in c["endpoints"]]} for c in p["chunks"]],
                  "k_star": k_star,
+                 "cost_curve": curve,
+                 "controllers": controllers,
                  "calibration_version": cal["version"]}
     (out / "kn-plan.json").write_text(json.dumps(plan_json, indent=2, ensure_ascii=False))
 
@@ -204,6 +220,10 @@ def main():
         (f"- K*_cost={k_star['k_cost']} (셀 단가 최소 K), K*_wall={k_star['k_wall']}"
          " (W_soft 용량 상한, 평균 w 기준) — 실제 파티션은 컨트롤러 경계·δ̂ 기반이라"
          " 평균 K와 다를 수 있다" if k_star else "- K*: 산출 불가 (캘리브레이션 부족)"),
+        (f"- 비용 곡선(셀 합성, 단일 청크·평균 w 기준, USD): "
+         f"C(K) ≈ {curve['a']:.2f} + {curve['b']:.3f}·K + {curve['c']:.4f}·K²"
+         f" — a: 청크 고정비, b: EP 한계비용, c: 컨텍스트 누적 항 (K*_cost=√(a/c))"
+         if curve else "- 비용 곡선: 산출 불가 (캘리브레이션 부족)"),
         f"- soft 초과 청크: {sum(1 for c in p['chunks'] if c['soft_exceeded'])}건"
         + (f" (요청 W_soft={w_soft:,} → 유효값으로 캡됨)" if p["w_soft"] < w_soft else ""), "",
         "## 모드×모델 매트릭스 (동일 플랜 로직)", "",
@@ -213,6 +233,15 @@ def main():
             lines.append(f"| {key} | {v} | — | — | — |")
         else:
             lines.append(f"| {key} | ${v['total_cost_usd']} | {v['n_chunks']} | {v['k_avg']} | {v['wall_h']}h |")
+    lines += ["", "## 컨트롤러 단위", "",
+              "> n·Σw·배정 청크는 컨트롤러별로 산출하지만, 비용 계수(a,b,c)는 셀 전역"
+              " 하나다 — 컨트롤러 소속이 EP별 관측(out·δ)의 분산을 유의하게 설명하지"
+              " 못했다 (research/unit_variance.py, 전 케이스 순열 p≥0.079).", "",
+              "| 컨트롤러 | n (EP) | Σw (tokens) | 배정 청크 |", "|---|---|---|---|"]
+    for name in sorted(controllers, key=lambda n: -controllers[n]["n"]):
+        info = controllers[name]
+        lines.append(f"| {name} | {info['n']} | {info['w_tokens']:,} "
+                     f"| {', '.join(f'#{i}' for i in info['chunks'])} |")
     lines += ["", "## 슬라이스 크기 상위 10 엔드포인트", "",
               "> w는 **코드 크기**(bytes/4)다 — 분기 수 등 복잡도는 반영하지 않는다.", "",
               "| Endpoint | w (tokens) | external | unresolved |", "|---|---|---|---|"]

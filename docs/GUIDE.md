@@ -193,7 +193,11 @@ kn-estimate /path/to/your-spring-project \
 2. **`n_chunks`·`k_avg`를 실행 계획으로 쓴다** — kn-plan.json의 청크 순서대로
    세션을 돌리고, 게이트 실패 청크만 재실행한다. 보고서의 `K*_cost`(셀 단가 최소 K)·
    `K*_wall`(W_soft 용량 상한 K)은 평균 w 기준 참고 지표다 — 실제 파티션은 컨트롤러
-   경계를 우선하므로 k_avg가 이와 다를 수 있다.
+   경계를 우선하므로 k_avg가 이와 다를 수 있다. 보고서의 **비용 곡선**
+   `C(K) ≈ a + b·K + c·K²`(a: 청크 고정비, b: EP 한계비용, c: 컨텍스트 누적 항)와
+   **컨트롤러 단위** 표(n·Σw·배정 청크, kn-plan.json `cost_curve`/`controllers`)로
+   구성 간 비교와 단위별 배치를 읽는다. 컨트롤러 단위의 a,b,c 분화는 제공하지
+   않는다 — 근거: `2026-07-26-cost-curve-and-unit-coefficients.md`.
 3. **비용은 구간으로 읽는다** — 실측 run 분산이 ±30~46%였다. `pi_low~pi_high` 밖의
    결과가 나오면 캘리브레이션 재생성을 검토한다.
 4. **`unresolved` 비율이 높으면(>20%)** 정적 슬라이스가 그 프로젝트의 DI 패턴을

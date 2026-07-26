@@ -72,6 +72,8 @@ cost = P_cache_read·Σ(τ_i·C) + P_cache_write·(S0 + Σδ_i) + P_out·Σout_i
 w_i는 절대 토큰이 아니라 δ·out·τ의 곱셈 공변량(ŵ^α)으로만 쓴다.
 
 배경과 수식 유도: [docs/cost-model-explained.md](docs/cost-model-explained.md).
+비용 곡선 계수(a,b,c)와 단위별 계수의 가능성·검정:
+[docs/2026-07-26-cost-curve-and-unit-coefficients.md](docs/2026-07-26-cost-curve-and-unit-coefficients.md).
 전체 정리: [docs/2026-07-16-kn-estimator-overview.md](docs/2026-07-16-kn-estimator-overview.md).
 설계: [docs/2026-07-09-kn-estimator-design.md](docs/2026-07-09-kn-estimator-design.md).
 
