@@ -143,6 +143,9 @@ kn-calibrate --ledger results/run_ledger.jsonl --runs results/runs --out my-cali
 kn-estimate <root> --calibration my-calibration.json
 ```
 
+`--calibration` 없이 실행하면(=동봉 LegacySut 계수) CLI가 그 사실과 §4.4 파일럿
+절차를 자동 고지한다 — 캘리브레이션은 실측 원장이 필요해 도구가 대신 수행할 수 없다.
+
 원장에 등장하지만 산출에서 빠진 셀은 `skipped_cells`에 사유와 함께 기록되고 stderr로
 경고된다 — `no_usable_runs(gate_fail=…, missing_transcript=…)`(게이트 전멸·트랜스크립트
 전멸), `insufficient_runs(...)`(표본<2, 트랜스크립트 부재분 병기), 또는
@@ -209,11 +212,29 @@ kn-estimate /path/to/your-spring-project \
 
 ```
 1) kn-estimate로 초기 플랜 산출 (내장 캘리브레이션, 절대값은 참고치)
-2) 가장 작은 청크 1개만 실제 실행 (파일럿)
+2) 같은 모드×모델로 **크기가 다른** 그룹 2개 이상 실행 (파일럿 — 예: EP 1개짜리
+   + 가장 작은 그룹). kn-calibrate의 env/ep 분해가 N 2점을 요구하고 셀당 run<2는
+   산출에서 제외되므로, 그룹 1개나 같은 크기 2개로는 계수가 나오지 않는다.
+   반복 2~3회면 분산 밴드까지 실측 기반이 된다 (±10% 수치는 N 2점×반복 3 설계).
 3) 파일럿의 run_ledger/트랜스크립트로 kn-calibrate 재실행 → 프로젝트 자체 계수
 4) 게이트 통과 세션의 컨텍스트 분포로 --w-soft 재산정 (p50~max 참고)
 5) --calibration + --w-soft로 재추정 → 나머지 청크 실행
 ```
+
+**파일럿 원장 스키마** — `kn-calibrate --ledger`가 읽는 `run_ledger.jsonl`은 run당
+한 줄의 JSON이다 (필수 필드):
+
+```json
+{"run_id": "myproj_flat_template_sonnet-n3-r1", "variant": "flat_template_sonnet",
+ "role": "run_total", "n": 3, "rep": 1, "gate": "pass",
+ "cost_usd": 5.1, "output_tokens": 41000, "wall_s": 900}
+```
+
+- `variant` → 셀 매핑: `flat`=flat/opus, `flat_sonnet`, `flat_haiku`,
+  `flat_template`=template/opus, `flat_template_sonnet`, `flat_template_haiku`.
+- `--runs` 디렉토리에는 `<run_id>/transcript.jsonl`(Claude Code 세션 트랜스크립트)을
+  두면 assistant 메시지 usage에서 S0·턴 수·최대 컨텍스트를 복원한다.
+- `gate`가 `pass`인 run만 계수에 반영된다 (실패 run은 조기 종료로 비용이 과소).
 
 이 파일럿-재캘리브레이션 루프가 "단일 프로젝트 캘리브레이션의 이전 한계"(3벤더 리뷰
 공통 지적)에 대한 실무 대응이다. **다중 프로젝트 캠페인 실측(2026-07)으로 검증됨**:
