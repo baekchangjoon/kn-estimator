@@ -63,7 +63,11 @@ def build_plan(slices, cal, mode="template", mdl="sonnet",
     cell = cal["cells"].get(f"{mode}/{mdl}")
     if cell is None:
         return {"status": "insufficient_calibration", "mode": mode, "model": mdl}
+    requested_w_hard = w_hard
     w_hard = min(w_hard, model_w_hard(mdl))
+    # W_soft가 유효 W_hard보다 크면 용량 계산이 hard 벽 위반 청크만 만들어 전 후보가
+    # 죽는다 (1M 모델 기준으로 조정한 --w-soft를 haiku에 물려주는 흔한 경로). 캡한다.
+    w_soft = min(w_soft, w_hard)
     w_mean = sum(s["w_tokens"] for s in slices) / len(slices)
     delta_of = lambda s: _delta_hat(cal, mode, mdl, s, w_mean)
     groups = _controller_groups(slices)
@@ -98,11 +102,18 @@ def build_plan(slices, cal, mode="template", mdl="sonnet",
                     "chunks": chunks}
     if best is None:
         # 모든 W_target frac에서 어떤 청크의 peak_context가 w_hard를 넘었다. 크래시 대신
-        # 상태를 돌려준다 — 호출자가 벽을 올리거나 모델을 바꿔야 하는 상황이다.
+        # 상태를 돌려준다. 처방은 병목에 따라 갈린다 — 모델 캡이 병목이면 --w-hard
+        # 상향은 no-op이므로 그 권고를 내면 사용자가 막다른 길을 돈다.
+        if w_hard < requested_w_hard:
+            advice = (f"유효 w_hard는 모델 윈도우 캡({w_hard:,})이라 --w-hard 상향은 "
+                      "무효다 — 컨텍스트 윈도우가 더 큰 모델을 지정하라.")
+        else:
+            advice = "--w-hard를 올리거나 컨텍스트가 더 큰 모델을 지정하라."
         return {"status": "infeasible_w_hard", "mode": mode, "model": mdl,
                 "w_hard": w_hard, "w_soft": w_soft,
+                "requested_w_hard": requested_w_hard,
                 "reason": "모든 W_target 후보에서 청크 peak_context가 w_hard를 초과했다. "
-                          "--w-hard를 올리거나 컨텍스트가 더 큰 모델을 지정하라."}
+                          + advice}
     best.update({"mode": mode, "model": mdl, "w_hard": w_hard, "w_soft": w_soft,
                  "parallel": parallel,
                  "k_avg": round(len(slices) / best["n_chunks"], 1)})
@@ -116,9 +127,14 @@ def k_stars(cal, mode, mdl, w_soft=W_SOFT_DEFAULT):
     cell = cal["cells"].get(f"{mode}/{mdl}")
     if cell is None:
         return None
-    k_wall = max(int((w_soft - cell["S0"] - cell["delta_env"]) // cell["delta_ep"]), 1)
+    # delta_ep는 two_point 경로에서 최소 1로 클램프되지만, 단일 N approx 경로는 0을
+    # 낼 수 있다 (모든 run의 cmax == s0) — 나눗셈 가드.
+    delta_ep = max(cell["delta_ep"], 1)
+    k_wall = max(int((w_soft - cell["S0"] - cell["delta_env"]) // delta_ep), 1)
     best_k, best_g, worse = 1, None, 0
-    for k in range(1, k_wall + 1):
+    # 탐색 상한: 정상 계수에서는 단봉이라 조기 종료되지만, 퇴화 계수(delta_ep≈0)는
+    # g가 단조 감소해 k_wall(수만)까지 돌 수 있다 — O(K²) 폭주 방지 캡.
+    for k in range(1, min(k_wall, 500) + 1):
         g = model.simulate_chunk(cal, mode, mdl, [1.0] * k)["cost_usd"] / k
         if best_g is None or g < best_g:
             best_k, best_g, worse = k, g, 0

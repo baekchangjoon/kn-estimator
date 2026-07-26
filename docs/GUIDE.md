@@ -141,9 +141,12 @@ kn-calibrate --ledger results/run_ledger.jsonl --runs results/runs --out my-cali
 kn-estimate <root> --calibration my-calibration.json
 ```
 
-산출에서 빠진 셀은 `skipped_cells`에 사유와 함께 기록되고 stderr로 경고된다 —
-`insufficient_runs(...)`(표본<2) 또는 `single_n_without_reference_cell(flat/opus)`
-(단일 N 셀인데 env:ep 분해 기준이 될 flat/opus 2점 fit이 원장에 없음).
+원장에 등장하지만 산출에서 빠진 셀은 `skipped_cells`에 사유와 함께 기록되고 stderr로
+경고된다 — `no_usable_runs(gate_fail=…, missing_transcript=…)`(게이트 전멸·트랜스크립트
+전멸), `insufficient_runs(...)`(표본<2, 트랜스크립트 부재분 병기), 또는
+`single_n_without_reference_cell(flat/opus)`(단일 N 셀인데 env:ep 분해 기준이 될
+flat/opus 2점 fit이 원장에 없음). 원장에 variant 자체가 없는 셀은 기록하지 않는다.
+`kn-estimate`의 매트릭스도 이 사유를 `insufficient_calibration (…)`으로 병기한다.
 
 ### ④ 플랜·보고서
 

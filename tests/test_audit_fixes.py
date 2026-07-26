@@ -38,16 +38,35 @@ def _project(tmp_path, files):
 # ---- #1 모델별 w_hard --------------------------------------------------------
 
 def test_w_hard_is_capped_by_model_context_window():
-    """haiku 윈도우는 200K다 — 사용자가 벽을 더 올려도 모델 상한을 넘길 수 없어야
-    하고, 산출 플랜의 어떤 청크도 그 상한을 넘는 peak_context를 가질 수 없다."""
+    """haiku 윈도우는 200K다 — 사용자가 벽을 더 올려도 모델 상한을 넘길 수 없고,
+    W_soft도 유효 W_hard로 캡돼 플랜은 (불가능 판정이 아니라) 상한 안에서 나온다."""
     cal = _cal()
     p = plan.build_plan(_slices(40), cal, mode="template", mdl="haiku",
                         w_soft=400_000, w_hard=900_000)
-    if p.get("status"):
-        assert p["status"] == "infeasible_w_hard"
-    else:
-        assert p["w_hard"] <= 180_000, p["w_hard"]
-        assert all(c["est_peak_context"] <= p["w_hard"] for c in p["chunks"])
+    assert not p.get("status"), p
+    assert p["w_hard"] <= 180_000, p["w_hard"]
+    assert p["w_soft"] <= p["w_hard"]
+    assert all(c["est_peak_context"] <= p["w_hard"] for c in p["chunks"])
+
+
+def test_infeasible_reason_distinguishes_user_limit_from_model_cap():
+    """벽 불가능 판정의 처방이 실행 가능해야 한다: 사용자 값이 병목이면 --w-hard 상향을,
+    모델 캡이 병목이면 (올려도 소용없으므로) 모델 교체를 권해야 한다."""
+    cal = _cal()
+    # 사용자 값(50K)이 캡(900K)보다 작아 병목 → --w-hard 상향 권고가 유효
+    p_user = plan.build_plan(_slices(4), cal, mode="template", mdl="sonnet",
+                             w_soft=180_000, w_hard=50_000)
+    assert p_user["status"] == "infeasible_w_hard"
+    assert "올리거나" in p_user["reason"]
+    # 모델 캡이 병목인 경우: --w-hard 상향은 no-op이므로 상향 권고 대신 무효 고지
+    tiny = {**cal, "cells": {"template/haiku": {**cal["cells"]["template/haiku"],
+                                                "delta_env": 400_000.0}}}
+    p_cap = plan.build_plan(_slices(4), tiny, mode="template", mdl="haiku",
+                            w_soft=500_000, w_hard=900_000)
+    assert p_cap["status"] == "infeasible_w_hard"
+    assert "올리거나" not in p_cap["reason"]
+    assert "무효" in p_cap["reason"]
+    assert p_cap["requested_w_hard"] == 900_000
 
 
 def test_w_hard_default_unchanged_for_1m_window_models():
@@ -68,6 +87,22 @@ def test_matrix_uses_same_parallel_assumption_as_plan():
     p = plan.build_plan(sls, cal, mode="template", mdl="sonnet",
                         w_soft=180_000, w_hard=900_000, parallel=True)
     assert m["template/sonnet"]["total_cost_usd"] == p["total_cost_usd"]
+
+
+def test_plan_interval_applies_parallel_surcharge():
+    """예측구간도 권장 플랜과 같은 실행 가정을 써야 한다 — 병렬 1.05× 할증이
+    총액에는 붙고 구간 하한에는 안 붙으면 같은 보고서 안에서 가정이 갈린다."""
+    cal = _cal()
+    sls = _slices(30, per_controller=3)
+    args = dict(mode="template", mdl="sonnet", w_soft=180_000, w_hard=900_000)
+    p_seq = plan.build_plan(sls, cal, **args, parallel=False)
+    p_par = plan.build_plan(sls, cal, **args, parallel=True)
+    i_seq = cli._plan_interval(cal, "template", "sonnet", sls, p_seq, 180_000)
+    i_par = cli._plan_interval(cal, "template", "sonnet", sls, p_par, 180_000,
+                               parallel=True)
+    # 허용 오차: build_plan 총액이 2자리 반올림이라 min/max 결합에 ~1e-4 편차가 남는다
+    assert abs(i_par[0] / i_seq[0] - 1.05) < 1e-3, (i_seq, i_par)
+    assert abs(i_par[1] / i_seq[1] - 1.05) < 1e-3
 
 
 # ---- #5 calibrate silent drop ------------------------------------------------
@@ -109,6 +144,47 @@ def test_below_min_runs_cell_is_reported(tmp_path):
     ledger.write_text("\n".join(json.dumps(r) for r in rows))
     cal = calibrate(ledger, tmp_path / "runs")
     assert "template/sonnet" in cal.get("skipped_cells", {})
+
+
+def test_all_gate_failed_cell_is_reported(tmp_path):
+    """가장 흔한 무플래그 drop — 셀의 run 전부가 게이트 실패(캠페인 실측: petclinic
+    haiku 0/6)면 groups에 아예 안 들어와 조용히 사라졌다. 사유가 남아야 한다."""
+    ok = [_write_run(tmp_path, "f-n1-r1", "flat", 1, 3.0),
+          _write_run(tmp_path, "f-n1-r2", "flat", 1, 3.2),
+          _write_run(tmp_path, "f-n8-r1", "flat", 8, 10.0),
+          _write_run(tmp_path, "f-n8-r2", "flat", 8, 11.0)]
+    bad = [_write_run(tmp_path, "h-n8-r1", "flat_template_haiku", 8, 0.3),
+           _write_run(tmp_path, "h-n8-r2", "flat_template_haiku", 8, 0.4)]
+    for r in bad:
+        r["gate"] = "fail"
+    ledger = tmp_path / "run_ledger.jsonl"
+    ledger.write_text("\n".join(json.dumps(r) for r in ok + bad))
+    cal = calibrate(ledger, tmp_path / "runs")
+    assert "template/haiku" not in cal["cells"]
+    assert "gate" in cal["skipped_cells"].get("template/haiku", ""), cal["skipped_cells"]
+
+
+def test_missing_transcript_is_annotated_not_misreported(tmp_path):
+    """트랜스크립트 파일 부재로 run이 빠졌으면 사유에 그 사실이 병기돼야 한다 —
+    순수 표본 부족(insufficient_runs)으로 오보하면 진단 채널이 오진을 낸다."""
+    rows = [_write_run(tmp_path, "t-n5-r1", "flat_template_sonnet", 5, 8.1),
+            _write_run(tmp_path, "t-n5-r2", "flat_template_sonnet", 5, 9.3)]
+    (tmp_path / "runs" / "t-n5-r2" / "transcript.jsonl").unlink()
+    ledger = tmp_path / "run_ledger.jsonl"
+    ledger.write_text("\n".join(json.dumps(r) for r in rows))
+    cal = calibrate(ledger, tmp_path / "runs")
+    why = cal["skipped_cells"].get("template/sonnet", "")
+    assert "missing_transcript" in why, why
+
+
+def test_matrix_surfaces_skip_reason():
+    """--calibration으로 받은 파일에 skipped_cells 사유가 있으면 매트릭스가
+    맨 insufficient_calibration 대신 그 사유를 병기해야 한다."""
+    cal = _cal()
+    cal["skipped_cells"] = {"flat/haiku": "no_usable_runs(gate_fail=3)"}
+    m = cli.build_matrix(_slices(6, per_controller=3), cal,
+                         w_soft=180_000, w_hard=900_000)
+    assert "no_usable_runs" in m["flat/haiku"], m["flat/haiku"]
 
 
 # ---- #6 공유 MyBatis XML 이중 가산 -------------------------------------------
@@ -173,9 +249,19 @@ def test_k_stars_reports_cost_and_wall_optima():
     expected_wall = max(int((180_000 - cell["S0"] - cell["delta_env"])
                             // cell["delta_ep"]), 1)
     assert ks["k_wall"] == expected_wall
-    assert 1 <= ks["k_cost"]
+    # k_cost는 브루트포스 argmin과 일치해야 한다 (조기 종료 회귀 방지 —
+    # `1 <= k_cost` 같은 단정은 초기값 때문에 항진식이라 커버리지가 없다)
+    from kn_estimator import model
+    brute = min(range(1, ks["k_wall"] + 1),
+                key=lambda k: model.simulate_chunk(
+                    cal, "template", "sonnet", [1.0] * k)["cost_usd"] / k)
+    assert ks["k_cost"] == brute
     # 미캘리브레이션 셀은 None
     assert plan.k_stars(cal, "flat", "haiku", w_soft=180_000) is None
+    # 퇴화 계수(delta_ep=0, 단일 N approx 경로에서 가능)에도 죽지 않는다
+    degen = {**cal, "cells": {"template/sonnet": {**cal["cells"]["template/sonnet"],
+                                                  "delta_ep": 0.0}}}
+    assert plan.k_stars(degen, "template", "sonnet", w_soft=180_000)["k_wall"] >= 1
 
 
 def test_report_includes_k_star_line(tmp_path, monkeypatch):
