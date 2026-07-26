@@ -34,6 +34,7 @@ kn-estimate <project_root> --mode template --model sonnet
 | `--calibration <path>` | 동봉 캘리브레이션 대신 다른 파일 사용 |
 | `--conservative` | 청크 컨텍스트 상한을 150K로 낮춘 보수 설정 |
 | `--parallel` | 청크를 병렬 실행한다고 가정하고 벽시계 계산 |
+| `--groups` | 비용 최적 생성 묶음을 "그룹N(EP, …)" 실행 지시 형태로 출력 |
 | `--out-dir <name>` | 산출물 디렉토리 이름 (기본 `.kn`) |
 
 캘리브레이션은 패키지에 동봉돼 있어 별도 데이터 없이 바로 동작한다.

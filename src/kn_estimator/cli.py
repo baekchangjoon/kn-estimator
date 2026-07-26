@@ -138,6 +138,8 @@ def main():
     ap.add_argument("--w-hard", type=int, default=plan_mod.W_HARD_DEFAULT)
     ap.add_argument("--conservative", action="store_true", help="W_soft=150K 보수 프리셋")
     ap.add_argument("--parallel", action="store_true")
+    ap.add_argument("--groups", action="store_true",
+                    help="비용 최적 생성 묶음을 '그룹N(EP, …)' 형태로 출력")
     ap.add_argument("--out-dir", default=".kn")
     args = ap.parse_args()
     w_soft = 150_000 if args.conservative else args.w_soft
@@ -263,6 +265,20 @@ def main():
               "- 미캘리브레이션 셀은 insufficient_calibration으로 표기 (추정치 미제공)."]
     (out / "kn-report.md").write_text("\n".join(lines) + "\n")
     print(f"N={n} chunks={p['n_chunks']} k_avg={p['k_avg']} est=${p['total_cost_usd']}")
+    if args.groups:
+        # "그룹1(q, w, e), 그룹2(z, x, y)로 돌리세요" — 요청 한 줄에 실행 계획으로
+        # 답하기 위한 출력. 각 그룹 = 독립 세션 1개 (이 조건이 1차 비용의 전제다).
+        print(f"\n[{Path(args.project_root).resolve().name}] "
+              f"비용 최적 생성 묶음 ({args.mode}×{args.model}):")
+        for i, c in enumerate(p["chunks"], 1):
+            eps = ", ".join(f"{s['endpoint']['method']} {s['endpoint']['path']}"
+                            for s in c["endpoints"])
+            print(f"  그룹{i}({eps}) — ${c['est_cost_usd']}, peak {c['est_peak_context']:,}")
+        print(f"위 {p['n_chunks']}개 그룹을 각각 **새 독립 세션**으로 돌리세요 — "
+              f"세션을 이어가면 비용이 2차로 돌아갑니다. "
+              f"예상 총 ${p['total_cost_usd']}"
+              + (f", 예측구간 ${interval[0]:,.0f}~${interval[1]:,.0f}" if interval else "")
+              + ".")
     print(f"report: {out/'kn-report.md'}\nplan:   {out/'kn-plan.json'}")
 
 
