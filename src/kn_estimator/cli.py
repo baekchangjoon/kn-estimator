@@ -271,12 +271,19 @@ def main():
         print(f"\n[{Path(args.project_root).resolve().name}] "
               f"비용 최적 생성 묶음 ({args.mode}×{args.model}):")
         for i, c in enumerate(p["chunks"], 1):
-            eps = ", ".join(f"{s['endpoint']['method']} {s['endpoint']['path']}"
-                            for s in c["endpoints"])
-            print(f"  그룹{i}({eps}) — ${c['est_cost_usd']}, peak {c['est_peak_context']:,}")
-        print(f"위 {p['n_chunks']}개 그룹을 각각 **새 독립 세션**으로 돌리세요 — "
-              f"세션을 이어가면 비용이 2차로 돌아갑니다. "
+            ep_labels = ", ".join(f"{s['endpoint']['method']} {s['endpoint']['path']}"
+                                  for s in c["endpoints"])
+            # 그룹 비용은 soft 페널티 반영값 — 총액과의 합산 정합을 위해서다
+            # (병렬 할증 5%는 플랜 수준 근사라 총액에만 명시).
+            shown = round(c["est_cost_usd"] * (1.15 if c["soft_exceeded"] else 1.0), 2)
+            mark = " ⚠soft 초과" if c["soft_exceeded"] else ""
+            print(f"  그룹{i}({ep_labels}) — ${shown}, peak {c['est_peak_context']:,}{mark}")
+        many = p["n_chunks"] > 1
+        print((f"위 {p['n_chunks']}개 그룹을 각각 **새 독립 세션**으로 돌리세요"
+               if many else "위 그룹을 **새 독립 세션**으로 돌리세요")
+              + " — 세션을 이어가면 비용이 2차로 돌아갑니다. "
               f"예상 총 ${p['total_cost_usd']}"
+              + (" (병렬 cache_write 할증 5% 포함)" if args.parallel else "")
               + (f", 예측구간 ${interval[0]:,.0f}~${interval[1]:,.0f}" if interval else "")
               + ".")
     print(f"report: {out/'kn-report.md'}\nplan:   {out/'kn-plan.json'}")
