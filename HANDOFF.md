@@ -47,8 +47,12 @@ python3.12 -m venv .venv && .venv/bin/pip install -e '.[test]'
 
 ## 4. 미결·주의
 
-- **git 히스토리에는 구 SUT 명칭·원자료가 남아 있다** — 완전 제거가 필요하면
-  `git filter-repo` 계열 히스토리 재작성(force-push, 파괴적)이 별도로 필요하다.
+- **git 히스토리 재작성 완료 (2026-07-27)** — `git filter-repo`로 전 커밋에서 구 SUT
+  원자료(원장·트랜스크립트·rv3·per_ep_covariate.py)를 경로 삭제하고 명칭을 블롭 수준
+  치환한 뒤 force-push했다 (tip 트리 바이트 불변 검증, 전 커밋 grep 0건, 로컬 백업
+  번들 `~/kn-estimator-prerewrite-20260727.bundle`). **잔존**: GitHub의 `refs/pull/1~6`
+  (PR 페이지)이 재작성 전 커밋을 계속 참조한다 — 이는 push로 지울 수 없고, 완전
+  제거는 GitHub Support의 GC 요청 또는 저장소 삭제·재생성이 필요하다.
 - 동봉 캘리브레이션은 여전히 **단일 프로젝트(tainted-spring-auth-user) 실측**이다 —
   절대 USD 비보증 한계는 동일하고, CLI가 파일럿 절차를 자동 고지한다.
 - opus 셀은 캠페인에서 미실측 — 매트릭스에 `insufficient_calibration`으로 나온다.
