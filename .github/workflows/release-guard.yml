@@ -1,0 +1,86 @@
+name: release-guard
+
+# 모든 v* 태그·릴리스를 release.yml 계약에 대해 검증하는 탐지 컨트롤 — 수동
+# `gh release create`나 잘못 찍힌 태그가 조용히 배포되는 대신 빨간 런으로 드러난다.
+# (GITHUB_TOKEN이 만든 릴리스는 이 트리거를 발화시키지 않으므로, release.yml이
+#  같은 스크립트를 셀프체크로 돌린다. 이 트리거는 사람 자격증명으로 만든 수동
+#  태그/릴리스를 잡는 그물이다.)
+on:
+  push:
+    tags: ["v*"]
+  release:
+    types: [published, edited]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "검증할 태그 (예: v0.1.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-guard-${{ github.event_name == 'release' && github.event.release.tag_name || github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Resolve tag
+        id: tag
+        env:
+          EVENT: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          case "$EVENT" in
+            workflow_dispatch) TAG="$INPUT_TAG" ;;
+            release)           TAG="$RELEASE_TAG" ;;
+            *)                 TAG="$REF_NAME" ;;
+          esac
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([._+-][A-Za-z0-9._+-]*)?$ ]]; then
+            if [ "$EVENT" = "push" ]; then
+              echo "::notice::push된 태그 '$TAG'는 v<semver> 릴리스 태그가 아니다 — 가드 생략."
+              echo "skip=1" >> "$GITHUB_OUTPUT"; exit 0
+            fi
+            echo "::error::'$TAG'는 v<semver> 태그가 아니다."; exit 1
+          fi
+          echo "skip=0" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          # 태그 push는 release.yml의 릴리스 생성과 레이스할 수 있다 — release/dispatch
+          # 이벤트만 릴리스 존재를 강제한다.
+          if [ "$EVENT" = "push" ]; then
+            echo "require_release=0" >> "$GITHUB_OUTPUT"
+          else
+            echo "require_release=1" >> "$GITHUB_OUTPUT"
+          fi
+
+      # 체크아웃 2개: 가드 스크립트는 기본 브랜치에서(가드 이전 태그에는 스크립트가
+      # 없고, 판정 로직은 항상 최신이어야 한다), 검증 대상 소스는 태그에서.
+      - uses: actions/checkout@v4
+        if: steps.tag.outputs.skip != '1'
+        with:
+          ref: refs/heads/${{ github.event.repository.default_branch }}
+          path: guard-src
+      - uses: actions/checkout@v4
+        if: steps.tag.outputs.skip != '1'
+        with:
+          ref: refs/tags/${{ steps.tag.outputs.tag }}
+          path: release-src
+      - uses: actions/setup-python@v5
+        if: steps.tag.outputs.skip != '1'
+        with:
+          python-version: "3.12"
+      - name: Validate source version + release assets
+        if: steps.tag.outputs.skip != '1'
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          GH_REPO: ${{ github.repository }}
+          REQUIRE_RELEASE: ${{ steps.tag.outputs.require_release }}
+          GH_TOKEN: ${{ github.token }}
+        working-directory: release-src
+        run: bash ../guard-src/.github/scripts/release-guard.sh

@@ -1,0 +1,116 @@
+name: release
+
+# 원클릭 릴리스: 테스트 게이트 → sdist/wheel 빌드 → v<version> 태그 → 자산+sha256 첨부 릴리스.
+# 실행: Actions → "release" → Run workflow (version 비우면 pyproject.toml 버전 사용).
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "릴리스 버전 (비우면 pyproject.toml에서 읽음). 태그는 v<version>."
+        required: false
+        type: string
+      prerelease:
+        description: "pre-release로 표시"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write   # 태그·릴리스 생성
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # 신뢰할 수 없는 입력(dispatcher가 타이핑한 version)은 env로만 전달하고,
+      # 전체 문자열 [[ =~ ]] 매치로 검증한 뒤에만 사용한다 (grep -E는 라인 단위
+      # 매치라 개행 포함 값이 우회할 수 있다).
+      - name: Resolve release version
+        id: ver
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          VERSION="$INPUT_VERSION"
+          if [ -z "$VERSION" ]; then
+            VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          fi
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([._+-][A-Za-z0-9._+-]*)?$ ]]; then
+            echo "::error::잘못된 버전 '$VERSION' — <major>.<minor>.<patch>(+선택 한정자) 형식이어야 한다."
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION"   >> "$GITHUB_OUTPUT"
+
+      - name: Fail if tag already exists
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "::error::태그 $TAG 가 이미 있다. pyproject.toml 버전을 올리거나 새 version 입력을 줘라."
+            exit 1
+          fi
+
+      # 릴리스 버전은 소스(pyproject.toml)의 버전과 같아야 한다 — 다르면 이 태그를
+      # 클론해 빌드한 사람이 릴리스 자산과 다른 버전을 얻는 조용한 스큐가 생긴다.
+      - name: Verify source version matches the release version
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          SOURCE_VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          if [ "$SOURCE_VERSION" != "$VERSION" ]; then
+            echo "::error::릴리스 버전 '$VERSION' != pyproject.toml 버전 '$SOURCE_VERSION'. 소스 버전을 먼저 올려 커밋하라."
+            exit 1
+          fi
+
+      - name: Test gate
+        run: |
+          pip install -e '.[test]'
+          python -m pytest tests/ -q
+
+      - name: Build + stage artifacts
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          pip install build
+          python -m build
+          ( cd dist && for f in *.tar.gz *.whl; do sha256sum "$f" > "$f.sha256"; done )
+          ls -1 dist
+          count=$(find dist -maxdepth 1 \( -name '*.tar.gz' -o -name '*.whl' \) | wc -l | tr -d ' ')
+          test "$count" -eq 2 || { echo "::error::sdist+wheel 2개를 기대했는데 $count 개가 스테이징됐다."; exit 1; }
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.ver.outputs.version }}
+          TAG: ${{ steps.ver.outputs.tag }}
+          TARGET_SHA: ${{ github.sha }}
+          PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          PRERELEASE_FLAG=""
+          if [ "$PRERELEASE" = "true" ]; then PRERELEASE_FLAG="--prerelease"; fi
+          gh release create "$TAG" \
+            dist/*.tar.gz dist/*.whl dist/*.sha256 \
+            --target "$TARGET_SHA" \
+            --title "v${VERSION}" \
+            --generate-notes \
+            $PRERELEASE_FLAG
+
+      # GITHUB_TOKEN으로 만든 릴리스는 release-guard 워크플로의 트리거를 발화시키지
+      # 않는다(워크플로→워크플로 이벤트 억제) — 같은 가드를 여기서 셀프체크로 돌린다.
+      - name: Release guard self-check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.ver.outputs.tag }}
+          GH_REPO: ${{ github.repository }}
+          REQUIRE_RELEASE: "1"
+        run: bash .github/scripts/release-guard.sh
