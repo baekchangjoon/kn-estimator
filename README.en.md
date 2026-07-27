@@ -45,6 +45,8 @@ brew install baekchangjoon/tap/kn-estimator
 docker run --rm -v "$PWD:/w" ghcr.io/baekchangjoon/kn-estimator /w --groups
 ```
 
+> `/w` in the output is the in-container mount path — artifacts land in `$PWD/.kn` on the host.
+
 **pip** (if you already have Python 3.9+):
 
 ```bash
@@ -129,7 +131,7 @@ kn-estimate <project_root> [options]
 | `--w-hard <n>` | 900000 | Model ceiling wall (auto-capped at 0.9× the model window — 180K for haiku) |
 | `--conservative` | off | W_soft=250K preset |
 | `--parallel` | off | Assume parallel chunk execution (wall-clock = max, 5% cache-write surcharge) |
-| `--out-dir <name>` | `.kn` | Output directory name |
+| `--out-dir <path>` | `.kn` | Output directory — relative to the project root, or absolute |
 
 ## Calibration
 
@@ -166,7 +168,7 @@ src/kn_estimator/
 docs/                    # guide, derivations, design, measurement campaign, research notes
 results/                 # calibration ledger + transcripts (raw data for reproduction)
 research/                # verification scripts (w covariate, per-unit coefficient tests)
-tests/                   # pytest — 45 tests without the SUT, +13 with it
+tests/                   # pytest — 67 tests without the SUT, +13 with it
 ```
 
 ## Tests
@@ -177,7 +179,7 @@ tests/                   # pytest — 45 tests without the SUT, +13 with it
 
 Tests that depend on the SUT (a petclinic fork) or an external sample are
 skipped when absent (paths configurable via `KN_SUT`, `KN_EXTERNAL_SAMPLE`,
-`KN_LEDGER`/`KN_RUNS`). The remaining 45 are environment-independent and run in
+`KN_LEDGER`/`KN_RUNS`). The remaining 67 are environment-independent and run in
 CI (GitHub Actions) on every push and PR.
 
 ## Documentation (Korean)

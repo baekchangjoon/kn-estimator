@@ -183,7 +183,7 @@ kn-estimate /path/to/your-spring-project \
 | `--conservative` | off | W_soft=250K 보수 프리셋 |
 | `--parallel` | off | 청크 병렬 실행 가정 (벽시계=max, cache_write 할증) |
 | `--groups` | off | 비용 최적 생성 묶음을 "그룹N(EP, …) — $비용" 실행 지시로 출력 |
-| `--out-dir` | .kn | 출력 디렉토리 |
+| `--out-dir` | .kn | 출력 디렉토리 (프로젝트 루트 기준 상대 또는 절대 경로) |
 
 ### 4.3 결과 해석 가이드
 
@@ -236,6 +236,8 @@ kn-estimate /path/to/your-spring-project \
 - `--runs` 디렉토리에는 `<run_id>/transcript.jsonl`(Claude Code 세션 트랜스크립트)을
   두면 assistant 메시지 usage에서 S0·턴 수·최대 컨텍스트를 복원한다.
 - `gate`가 `pass`인 run만 계수에 반영된다 (실패 run은 조기 종료로 비용이 과소).
+- 오류 경로: 원장 부재·깨진 JSON 줄은 위치를 지목하며 종료하고, 사용 가능한 run이
+  0건이면(게이트 전멸·형식 불일치) 파일을 만들지 않고 비-0 exit로 실패한다.
 
 이 파일럿-재캘리브레이션 루프가 "단일 프로젝트 캘리브레이션의 이전 한계"(3벤더 리뷰
 공통 지적)에 대한 실무 대응이다. **다중 프로젝트 캠페인 실측(2026-07)으로 검증됨**:
