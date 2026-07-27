@@ -64,7 +64,8 @@ def test_calibrate_broken_ledger_line_names_the_line(tmp_path):
     ledger.write_text('{"ok": 1}\nnot-json\n')
     with pytest.raises(SystemExit) as e:
         calibrate.main(["--ledger", str(ledger), "--runs", str(tmp_path)])
-    assert "2" in str(e.value) and "파싱" in str(e.value)
+    # 경로에 우연히 든 숫자로 통과하지 않도록 "<파일>:줄번호:" 형태를 정확히 고정
+    assert f"{ledger}:2:" in str(e.value) and "파싱" in str(e.value)
 
 
 # ---- D2: 빈 원장 → 비-0 exit --------------------------------------------------
@@ -76,7 +77,7 @@ def test_calibrate_zero_usable_runs_is_an_error(tmp_path):
     with pytest.raises(SystemExit) as e:
         calibrate.main(["--ledger", str(ledger), "--runs", str(tmp_path),
                         "--out", str(out)])
-    assert "0" in str(e.value)
+    assert "0건" in str(e.value)
     assert not out.exists()   # 빈 캘리브레이션 파일을 남기지 않는다
 
 

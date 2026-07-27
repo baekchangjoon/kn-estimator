@@ -140,7 +140,8 @@ def build_matrix(sls, cal, w_hard, w_soft, parallel=False):   # 인자 순서 = 
 
 
 def main():
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(
+        description="Spring 프로젝트 정적 스캔 → 테스트 생성 비용/청크 플랜 예측 (LLM 호출 없음)")
     ap.add_argument("project_root", help="스캔할 Spring 프로젝트 루트 디렉토리")
     ap.add_argument("--mode", default="template", choices=["template", "flat"],
                     help="생성 모드 (기본 template)")
