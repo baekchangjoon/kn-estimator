@@ -104,8 +104,15 @@ def test_uncalibrated_cell_is_flagged():
 # ---- model: hold-out & coverage ---------------------------------------------
 
 def _measured(arm, n):
+    """게이트 통과 run의 [(rep, cost)] — rep 번호를 함께 보존한다.
+
+    LOO에서 rep 번호(제외 필터)와 리스트 인덱스(채점 대상)를 혼동하면, 게이트에서
+    이미 떨어진 rep을 제외하는 no-op fit이나 채점 대상 자신으로 만든 구간이 생겨
+    동어반복 hit이 된다 (리뷰 지적).
+    """
     rows = [json.loads(l) for l in (LEDGER).read_text().splitlines()]
-    return [r["cost_usd"] for r in rows if r["variant"] == arm and r.get("n") == n
+    return [(r["rep"], r["cost_usd"]) for r in rows
+            if r["variant"] == arm and r.get("n") == n
             and r["role"] == "run_total" and r.get("gate") == "pass"
             and r.get("rep") in (1, 2, 3)]
 
@@ -117,7 +124,8 @@ def test_holdout_fit_partial_predict_rest_template_sonnet():
                                                      and r["n"] == N_MAX
                                                      and r["rep"] in (2, 3)))
     est = model.estimate_cell(cal, "template", "sonnet", [1.0] * N_MAX)
-    lo, hi = min(_measured("flat_template_sonnet", N_MAX)), max(_measured("flat_template_sonnet", N_MAX))
+    costs = [c for _, c in _measured("flat_template_sonnet", N_MAX)]
+    lo, hi = min(costs), max(costs)
     assert lo * 0.8 <= est["cost_usd"] <= hi * 1.2, (est["cost_usd"], lo, hi)
 
 
@@ -134,25 +142,40 @@ def test_order_preservation():
 
 
 def test_loo_prediction_interval_coverage():
-    # 각 셀: rep 하나를 빼고 fit → 빠진 rep이 α-민감도 예측구간 안에 드는 비율 ≥ 2/3
+    """각 셀: rep 하나를 빼고 fit → 빠진 rep이 예측구간 안에 드는 비율 ≥ 2/3.
+
+    단일 프로젝트 원장(케이스 8개)로는 셀당 rep 2~3개뿐이라 극단 rep 하나가
+    게이트를 좌우한다 — 캠페인 3개 원장을 풀링해 케이스 22개로 검정한다.
+    KN_LEDGER를 지정하면 그 원장 하나로만 검정한다 (자체 원장 검증용)."""
+    if os.environ.get("KN_LEDGER"):
+        sources = [(LEDGER, RUNS)]
+    else:
+        base = REPO / "results/campaign"
+        sources = [(base / p / "run_ledger.jsonl", base / p / "runs")
+                   for p in ("auth-user", "petclinic", "community")]
     hits = tot = 0
-    for arm, cell in (("flat_template_sonnet", ("template", "sonnet")),
-                      ("flat_template_haiku", ("template", "haiku")),
-                      ("flat_sonnet", ("flat", "sonnet"))):
-        measured = _measured(arm, N_MAX)
-        for held in range(1, len(measured) + 1):
-            cal = calibrate.calibrate(
-                LEDGER, RUNS,
-                include=lambda r, a=arm, h=held: not (r["variant"] == a and r["n"] == N_MAX
-                                                      and r["rep"] == h))
-            est = model.estimate_cell(cal, cell[0], cell[1], [1.0] * N_MAX)
-            if est.get("status"):
-                continue
-            actual = measured[held - 1]
-            tot += 1
-            if est["pi_low"] <= actual <= est["pi_high"]:
-                hits += 1
-    assert tot >= 7 and hits / tot >= 2 / 3, (hits, tot)
+    for ledger, runs in sources:
+        rows = [json.loads(l) for l in ledger.read_text().splitlines()]
+        n_max = max(r["n"] for r in rows if r["role"] == "run_total")
+        for arm, cell in (("flat_template_sonnet", ("template", "sonnet")),
+                          ("flat_template_haiku", ("template", "haiku")),
+                          ("flat_sonnet", ("flat", "sonnet"))):
+            meas = [(r["rep"], r["cost_usd"]) for r in rows
+                    if r["variant"] == arm and r.get("n") == n_max
+                    and r["role"] == "run_total" and r.get("gate") == "pass"
+                    and r.get("rep") in (1, 2, 3)]
+            for held_rep, actual in meas:
+                cal = calibrate.calibrate(
+                    ledger, runs,
+                    include=lambda r, a=arm, h=held_rep, n=n_max:
+                        not (r["variant"] == a and r["n"] == n and r["rep"] == h))
+                est = model.estimate_cell(cal, cell[0], cell[1], [1.0] * n_max)
+                if est.get("status"):
+                    continue
+                tot += 1
+                if est["pi_low"] <= actual <= est["pi_high"]:
+                    hits += 1
+    assert tot >= 8 and hits / tot >= 2 / 3, (hits, tot)
 
 
 # ---- plan --------------------------------------------------------------------

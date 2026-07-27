@@ -27,6 +27,13 @@ def load_calibration(path=None):
     """
     if path:
         p = Path(path)
+        # 동봉 번들 이름(petclinic·community·auth-user)도 허용 — 파일 경로가 아니면
+        # data/calibration-<이름>.json (기본 번들 이름이면 calibration.json)을 쓴다.
+        if not p.exists() and "/" not in str(path):
+            bundled = (BUNDLED_CALIBRATION if path == "auth-user"
+                       else HERE / f"data/calibration-{path}.json")
+            if bundled.exists():
+                p = bundled
         if not p.exists():
             raise SystemExit(f"--calibration 경로를 찾을 수 없다: {p}")
     else:
@@ -168,6 +175,10 @@ def main():
                             w_hard=args.w_hard, w_soft=w_soft, parallel=args.parallel)
     if p.get("status"):
         why = (cal.get("skipped_cells") or {}).get(f"{args.mode}/{args.model}")
+        if p["status"] == "insufficient_calibration" and not why:
+            # 원장에 variant 자체가 없던 셀 — 스킵 사유조차 없다. 빈 메시지로 죽지
+            # 않고 미측정 사실과 가용 셀을 알린다.
+            why = (f"동봉 캘리브레이션 미측정 셀 — 가용: {', '.join(sorted(cal['cells']))}")
         print(f"{p['status']}: {p.get('reason') or why or ''}")
         sys.exit(1)
 

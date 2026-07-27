@@ -110,7 +110,7 @@ kn-estimate <project_root> [옵션]
 
 동봉 캘리브레이션(tainted-spring-auth-user 실측 17 run, 3셀 — opus 미실측)으로 별도
 데이터 없이 바로 동작하고, petclinic·tainted-spring-community 캘리브레이션도
-`data/`에 동봉돼 `--calibration`으로 선택할 수 있습니다. 단 동봉 계수는 단일
+동봉돼 이름으로 선택할 수 있습니다 (`--calibration petclinic`, `--calibration community`). 단 동봉 계수는 단일
 프로젝트 실측이라 **절대 USD는 보증하지 않습니다** —
 다중 프로젝트 실측(54 run)에서 동봉 계수 그대로는 오차 −23~−34%, 파일럿
 재캘리브레이션 후 ±10%였습니다. `--calibration` 없이 실행하면 CLI가 이 사실과

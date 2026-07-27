@@ -112,7 +112,7 @@ kn-estimate <project_root> [options]
 
 The bundled calibration (17 measured runs on tainted-spring-auth-user, 3 cells —
 opus not measured) works out of the box, and petclinic/tainted-spring-community
-calibrations ship in `data/` for `--calibration`. It is still a single-project
+calibrations ship alongside, selectable by name (`--calibration petclinic`). It is still a single-project
 measurement, so **absolute USD is not guaranteed** — across 54 runs on three other projects, bundled coefficients
 were off by −23~−34%, and a pilot recalibration brought the error within ±10%.
 When run without `--calibration`, the CLI states this and prints the pilot

@@ -62,3 +62,30 @@ def test_explicit_calibration_suppresses_pilot_notice(tmp_path, monkeypatch, cap
     cli.main()
     out = capsys.readouterr().out
     assert "파일럿" not in out
+
+
+def test_unmeasured_cell_error_names_available_cells(tmp_path, monkeypatch, capsys):
+    """동봉 캘리브레이션에 아예 없는 셀(opus)을 고르면, 빈 메시지로 죽지 않고
+    미측정 사실과 가용 셀 목록을 알려야 한다 (번들 교체 후 회귀 방지)."""
+    root = _project(tmp_path)
+    monkeypatch.setattr(sys, "argv",
+                        ["kn-estimate", root, "--mode", "template", "--model", "opus"])
+    try:
+        cli.main()
+        assert False, "exit해야 한다"
+    except SystemExit as e:
+        assert e.code == 1
+    out = capsys.readouterr().out
+    assert "미측정" in out and "template/sonnet" in out, out
+
+
+def test_calibration_accepts_bundled_name(tmp_path, monkeypatch, capsys):
+    """--calibration petclinic 처럼 동봉 번들 이름으로도 선택할 수 있어야 한다 —
+    동봉 대안 파일(data/calibration-*.json)의 문서화된 사용 경로."""
+    root = _project(tmp_path)
+    monkeypatch.setattr(sys, "argv",
+                        ["kn-estimate", root, "--calibration", "petclinic"])
+    cli.main()
+    out = capsys.readouterr().out
+    assert "N=1" in out
+    assert "파일럿" not in out   # 명시 선택이므로 고지 억제
