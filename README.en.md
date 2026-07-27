@@ -4,6 +4,7 @@
 
 <p align="center">
   <a href="https://github.com/baekchangjoon/kn-estimator/actions/workflows/tests.yml"><img alt="tests" src="https://github.com/baekchangjoon/kn-estimator/actions/workflows/tests.yml/badge.svg"></a>
+  <a href="https://github.com/baekchangjoon/kn-estimator/releases"><img alt="release" src="https://img.shields.io/github/v/release/baekchangjoon/kn-estimator?display_name=release&label=release"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-yellow.svg"></a>
   <img alt="Python" src="https://img.shields.io/badge/Python-3.9%2B-blue">
   <img alt="Dependencies" src="https://img.shields.io/badge/dependencies-stdlib%20only-informational">
@@ -24,11 +25,33 @@ chunked runs:    cost(N) ≈ N × g(K),  g(K) = a/K + b + c·K   ← linear once
 
 ## Install
 
+Python is not required — the recommended path is [uv](https://docs.astral.sh/uv/)
+(uv downloads and manages the CPython it needs):
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh    # one-time uv install
+uvx --from git+https://github.com/baekchangjoon/kn-estimator kn-estimate <spring-project> --groups
+```
+
+**Homebrew** (macOS/Linux):
+
+```bash
+brew install baekchangjoon/tap/kn-estimator
+```
+
+**Docker** (GHCR — mount the target project as a volume):
+
+```bash
+docker run --rm -v "$PWD:/w" ghcr.io/baekchangjoon/kn-estimator /w --groups
+```
+
+**pip** (if you already have Python 3.9+):
+
 ```bash
 pip install git+https://github.com/baekchangjoon/kn-estimator
 ```
 
-Python 3.9+ and the standard library only. For development:
+Standard library only — no extra dependencies. For development:
 
 ```bash
 git clone https://github.com/baekchangjoon/kn-estimator && cd kn-estimator
