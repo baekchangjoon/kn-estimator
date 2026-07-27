@@ -9,9 +9,26 @@ permissions:
   contents: read
   packages: write
 
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e '.[test]'
+      - run: python -m pytest tests/ -q
+
   build-push:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: test   # 테스트를 통과한 커밋만 이미지로 배포한다
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-qemu-action@v3
