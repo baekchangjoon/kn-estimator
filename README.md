@@ -140,7 +140,7 @@ src/kn_estimator/
 docs/                    # 가이드·수식 유도·설계·실측 캠페인·연구 노트
 results/                 # 캘리브레이션 원장·트랜스크립트 (재현용 원자료)
 research/                # 검정 스크립트 (w 공변량, 단위별 계수 분화)
-tests/                   # pytest — SUT 없이 43건, SUT 있으면 +13건
+tests/                   # pytest — SUT 없이 45건, SUT 있으면 +13건
 ```
 
 ## 테스트
@@ -151,7 +151,7 @@ tests/                   # pytest — SUT 없이 43건, SUT 있으면 +13건
 
 SUT(petclinic 포크)·외부 샘플 의존 테스트는 해당 경로가 없으면 건너뜁니다
 (`KN_SUT`, `KN_EXTERNAL_SAMPLE`, `KN_LEDGER`/`KN_RUNS` 환경변수로 지정 가능).
-나머지 43건은 환경 무관이며 CI(GitHub Actions)가 push·PR마다 실행합니다.
+나머지 45건은 환경 무관이며 CI(GitHub Actions)가 push·PR마다 실행합니다.
 
 ## 문서
 
