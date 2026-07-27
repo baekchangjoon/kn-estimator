@@ -137,7 +137,7 @@ Spring 컨트롤러를 정규식 스캔해 JSON 응답 핸들러만 채택한다
 
 ### ③ 캘리브레이션
 
-기본값은 패키지에 동봉된 사전 산출 캘리브레이션(`data/calibration.json` — tainted-spring-auth-user 캠페인 실측 17 run, 3셀: template/sonnet 6·template/haiku 6·flat/sonnet 5)이다. petclinic·community 캘리브레이션도 `data/`에 동봉돼 `--calibration`으로 선택한다. 자체 실측이 쌓이면:
+기본값은 패키지에 동봉된 사전 산출 캘리브레이션(`data/calibration.json` — tainted-spring-auth-user 캠페인 실측 17 run, 3셀: template/sonnet 6·template/haiku 6·flat/sonnet 5)이다. petclinic·community 캘리브레이션도 동봉돼 이름으로 선택한다 (`--calibration petclinic|community`, 경로 지정도 가능). 자체 실측이 쌓이면:
 
 ```bash
 kn-calibrate --ledger results/run_ledger.jsonl --runs results/runs --out my-calibration.json
