@@ -114,3 +114,32 @@ jobs:
           GH_REPO: ${{ github.repository }}
           REQUIRE_RELEASE: "1"
         run: bash .github/scripts/release-guard.sh
+
+      # 릴리스 성공 후 Homebrew tap 자동 bump — 쓰기 deploy key(TAP_DEPLOY_KEY)는
+      # homebrew-tap 한 저장소에만 유효하다. sed 치환 후 ruby 문법 검증을 통과해야
+      # push한다 (깨진 포뮬러가 tap에 올라가는 것을 막는 가드).
+      - name: Bump Homebrew tap
+        uses: actions/checkout@v4
+        with:
+          repository: baekchangjoon/homebrew-tap
+          ssh-key: ${{ secrets.TAP_DEPLOY_KEY }}
+          path: tap
+      - name: Update formula and push
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          TARBALL="https://github.com/${GITHUB_REPOSITORY}/archive/refs/tags/${TAG}.tar.gz"
+          SHA=$(curl -sL "$TARBALL" | sha256sum | cut -d' ' -f1)
+          if [[ ! "$SHA" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "::error::tarball sha256 계산 실패 ($SHA)"; exit 1
+          fi
+          FORMULA=tap/Formula/kn-estimator.rb
+          sed -i -e "s|^  url .*|  url \"$TARBALL\"|"                  -e "s|^  sha256 .*|  sha256 \"$SHA\"|" "$FORMULA"
+          ruby -c "$FORMULA"
+          grep -q "$TAG" "$FORMULA" || { echo "::error::포뮬러에 $TAG 반영 실패"; exit 1; }
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "kn-estimator ${VERSION}"
+          git push
