@@ -143,7 +143,7 @@ src/kn_estimator/
 docs/                    # guide, derivations, design, measurement campaign, research notes
 results/                 # calibration ledger + transcripts (raw data for reproduction)
 research/                # verification scripts (w covariate, per-unit coefficient tests)
-tests/                   # pytest — 42 tests without the SUT, +15 with it
+tests/                   # pytest — 45 tests without the SUT, +13 with it
 ```
 
 ## Tests
@@ -154,7 +154,7 @@ tests/                   # pytest — 42 tests without the SUT, +15 with it
 
 Tests that depend on the SUT (a petclinic fork) or an external sample are
 skipped when absent (paths configurable via `KN_SUT`, `KN_EXTERNAL_SAMPLE`,
-`KN_LEDGER`/`KN_RUNS`). The remaining 43 are environment-independent and run in
+`KN_LEDGER`/`KN_RUNS`). The remaining 45 are environment-independent and run in
 CI (GitHub Actions) on every push and PR.
 
 ## Documentation (Korean)
