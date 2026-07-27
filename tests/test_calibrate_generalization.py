@@ -1,6 +1,6 @@
 """캘리브레이션 일반화 결함의 TDD 고정 — 다중 프로젝트 캠페인(2026-07-17)에서 발견.
 
-F6: calibrate.py가 measured_costs를 `n == 8` run에서만 수집한다 (LegacySut 전제).
+F6: calibrate.py가 measured_costs를 `n == 8` run에서만 수집한다 (초기 캘리브레이션 SUT의 최대 N=8 전제).
 최대 N이 8이 아닌 프로젝트(tainted-spring: N=5)는 measured_costs가 빈 배열이 되고,
 model._run_variance_band가 실측 분산 대신 기본 밴드(0.7/1.3)로 조용히 퇴화한다.
 """

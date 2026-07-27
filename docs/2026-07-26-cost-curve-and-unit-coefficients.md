@@ -54,8 +54,8 @@ N=16, 셀당 3 run ≈ $30~60)을 실측해야 계수의 독립 검증이 된다
 ## 3. 검정 — 컨트롤러 소속이 per-EP 관측의 분산을 설명하는가
 
 **방법** (`research/unit_variance.py`): 캠페인 per-EP 관측 103건
-(`results/campaign/analysis/alpha-observations.json`) + LegacySut template run
-6건의 트랜스크립트 복원 관측. run 반복을 EP 중앙값으로 접고 컨트롤러로 그룹핑,
+(`results/campaign/analysis/alpha-observations.json`) + 레거시 SUT template run
+6건의 트랜스크립트 복원 관측(원자료는 이후 저장소에서 제거 — 아래 두 행은 기록). run 반복을 EP 중앙값으로 접고 컨트롤러로 그룹핑,
 일원 분산분석의 η²(집단간 분산 비율)와 순열검정 p값(10,000회, seed 0,
 (hits+1)/(iters+1) 보정). **p 하한**(그 그룹 크기 구성에서 도달 가능한 최소 p)을
 함께 산출한다 — 하한이 α를 넘는 행은 어떤 데이터로도 유의에 도달할 수 없는,
@@ -77,7 +77,7 @@ N=16, 셀당 3 run ≈ $30~60)을 실측해야 계수의 독립 검증이 된다
 **해석:**
 
 - **8행 중 6행이 구조적으로 검정 불가이거나 검정력이 없다.** community(컨트롤러
-  1개)·LegacySut(컨트롤러당 EP 1개)는 단위간 차이와 EP간 차이를 분리할 수 없고,
+  1개)·레거시 SUT(컨트롤러당 EP 1개)는 단위간 차이와 EP간 차이를 분리할 수 없고,
   auth-user 2행은 그룹 크기 구성상 p가 0.067/0.167 밑으로 내려갈 수 없어 α=0.05
   도달이 수학적으로 불가능하다.
 - **실질 검정은 petclinic 2행뿐이고, 거기서도 유의하지 않았다** (p=0.079, 0.341).
@@ -112,4 +112,4 @@ python research/unit_variance.py \
   --repo community=<tainted-spring-community 경로>
 ```
 
-LegacySut 부분은 저장소 동봉 트랜스크립트만으로 복원되므로 SUT가 필요 없다.
+레거시 SUT 부분은 저장소 동봉 트랜스크립트만으로 복원되므로 SUT가 필요 없다.

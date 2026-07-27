@@ -1,11 +1,11 @@
 """캠페인 분석 — ① 프로젝트별 캘리브레이션 + 계수 비교표 ② α 재검정 (다중 프로젝트 풀링).
 
 ① kn_estimator.calibrate를 캠페인 원장에 적용해 프로젝트별 calibration을 만들고,
-   동봉(LegacySut) 계수와 나란히 놓는다 — "계수가 프로젝트마다 얼마나 다른가"가
+   동봉(레거시 SUT) 계수와 나란히 놓는다 — "계수가 프로젝트마다 얼마나 다른가"가
    이 캠페인의 1차 질문이다.
 ② research/per_ep_covariate.py의 복원 방법(template 모드: Write 1건 = EP 1개)을
    여러 프로젝트에 일반화해 EP별 (w, δ, out) 관측을 풀링하고 α를 로그선형 fit한다.
-   LegacySut 단독 검정(w 범위 24.3배, EP 8개)의 확장이다.
+   레거시 SUT 단독 검정(w 범위 24.3배, EP 8개)의 확장이다.
 
 실행: .venv/bin/python research/campaign/analyze.py
 """
@@ -175,7 +175,7 @@ def fit_alpha(obs, field):
 
 def main():
     cals = per_project_calibrations()
-    print("== ① 셀 계수 비교 (LegacySut 동봉 vs 캠페인 프로젝트) ==\n")
+    print("== ① 셀 계수 비교 (레거시 SUT 동봉 vs 캠페인 프로젝트) ==\n")
     print(comparison_table(cals))
     out_dir = CAMPAIGN / "analysis"
     out_dir.mkdir(parents=True, exist_ok=True)

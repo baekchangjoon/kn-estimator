@@ -279,9 +279,12 @@ def test_k_cost_is_exact_even_when_optimum_is_deep():
     cal = _cal()
     cell = {**cal["cells"]["template/sonnet"], "delta_ep": 30.0, "tau_ep": 1.0}
     deep = {**cal, "cells": {"template/sonnet": cell}}
-    ks = plan.k_stars(deep, "template", "sonnet", w_soft=180_000)
+    # w_soft를 셀 env에 상대적으로 잡아 동봉 계수가 바뀌어도 시나리오(용량≈2000·
+    # 최적점>500)가 유지되게 한다
+    w_soft = int(cell["S0"] + cell["delta_env"] + 60_000)
+    ks = plan.k_stars(deep, "template", "sonnet", w_soft=w_soft)
     assert ks["k_wall"] > 500 and ks["k_cost"] > 500   # 최적점이 구 500 캡 너머
-    brute = min(range(1, ks["k_wall"] + 1),
+    brute = min(range(1, min(ks["k_wall"], 2_000) + 1),
                 key=lambda k: model.simulate_chunk(
                     deep, "template", "sonnet", [1.0] * k)["cost_usd"] / k)
     assert ks["k_cost"] == brute, (ks, brute)

@@ -19,7 +19,7 @@ from pathlib import Path
 from kn_estimator import cli, model, plan, scan
 
 REPO = Path(__file__).resolve().parents[1]
-SUT = Path(os.environ.get("KN_SUT") or REPO / "legacy-sut")
+SUT = Path(os.environ.get("KN_SUT") or REPO / "petclinic")
 
 
 class SkipTest(unittest.SkipTest):
@@ -45,7 +45,7 @@ def test_build_plan_reports_infeasible_instead_of_crashing():
     """모든 W_target frac이 w_hard를 넘으면 크래시가 아니라 상태를 돌려줘야 한다."""
     _require_sut()
     sls = scan.build_slices(str(SUT), scan.inventory(str(SUT)))
-    got = plan.build_plan(sls, _cal(), mode="flat", mdl="opus", w_hard=1000)
+    got = plan.build_plan(sls, _cal(), mode="template", mdl="sonnet", w_hard=1000)
     assert isinstance(got, dict), type(got)
     assert got.get("status") == "infeasible_w_hard", got.get("status")
     assert "w_hard" in got
@@ -54,12 +54,12 @@ def test_build_plan_reports_infeasible_instead_of_crashing():
 def test_build_plan_still_works_at_realistic_walls():
     """정상 경로는 그대로여야 한다 (K4 수정이 회귀를 만들지 않았는지).
 
-    n_chunks=61은 K3(3) 네임스페이스 조인 이후 기준선이다 (그 전엔 60).
+    n_chunks=3은 petclinic(N=18) × 캠페인(auth-user) 계수 × W_soft 330K 기준선이다.
     """
     _require_sut()
     sls = scan.build_slices(str(SUT), scan.inventory(str(SUT)))
     got = plan.build_plan(sls, _cal(), mode="template", mdl="sonnet")
-    assert got["n_chunks"] == 61, got["n_chunks"]
+    assert got["n_chunks"] == 3, got["n_chunks"]
     assert got["total_cost_usd"] > 0
 
 
@@ -129,7 +129,7 @@ def test_mybatis_joins_by_namespace_not_only_by_directory():
     """XML이 DAO와 패키지 병치가 아니어도 네임스페이스로 찾아야 한다.
 
     현재는 디렉토리 prefix 매칭만 해서, XML을 공용 디렉토리에 모아두는 프로젝트에서는
-    아무것도 못 찾는다. LegacySut는 병치라 우연히 동작할 뿐이다.
+    아무것도 못 찾는다. 병치 프로젝트는 우연히 동작할 뿐이다.
     """
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -151,13 +151,26 @@ def test_mybatis_joins_by_namespace_not_only_by_directory():
         assert "order-sql.xml" in got, got
 
 
-def test_mybatis_namespace_join_still_finds_legacy-sut_colocated_xml():
-    """레거시 병치 프로젝트(LegacySut)에서 기존 결과를 잃지 않아야 한다."""
-    _require_sut()
-    eps = scan.inventory(str(SUT))
-    mng = next(e for e in eps if e["path"] == "/web/super/admin/mngTerms" and e["method"] == "GET")
-    sl = scan.build_slices(str(SUT), [mng])[0]
-    assert any(f.endswith("mngTerms.xml") for f in sl["files"]), sl["files"]
+def test_mybatis_colocated_xml_fallback_still_works():
+    """네임스페이스로 못 찾는 병치 프로젝트에서 기존(디렉토리 prefix) 결과를 잃지
+    않아야 한다 — 합성 픽스처로 고정 (네임스페이스 불일치 + 패키지 병치 XML)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        java = root / "src/main/java/app/dao"
+        java.mkdir(parents=True)
+        (java / "LegacyDAO.java").write_text(textwrap.dedent("""
+            package app.dao;
+            public class LegacyDAO {
+                public Object find(Object p) { return helper.run(QUERY_FIND, p); }
+            }
+        """))
+        xml = root / "src/main/resources/app/dao"
+        xml.mkdir(parents=True)
+        (xml / "legacy-sql.xml").write_text(
+            '<mapper namespace="unrelatedNs">\n' + "  <!-- pad -->\n" * 50 + "</mapper>\n")
+        idx = scan._Index(root)
+        got = [q.name for q in idx.mybatis_xml_for(java / "LegacyDAO.java")]
+        assert "legacy-sql.xml" in got, got
 
 
 # ---- K2(a) / C3 / C5: 보고서 정직성 -----------------------------------------
@@ -205,15 +218,17 @@ def test_plan_interval_is_computed_on_the_actual_partition():
 
 
 def test_matrix_does_not_crash_when_some_cell_is_infeasible():
-    """선택 셀은 되는데 다른 셀이 벽을 못 맞추는 경우 (예: 128K 모델 모델링).
+    """선택 셀은 되는데 다른 셀이 벽을 못 맞추는 경우.
 
-    K4 수정이 선택 셀만 다루면 매트릭스 루프에서 KeyError로 크래시가 옮겨간다.
+    template/haiku(env≈90K)는 130K 벽에서 동작하지만 template/sonnet(env≈190K)·
+    flat/sonnet(env≈118K+δ̂)은 못 맞춘다. K4 수정이 선택 셀만 다루면 매트릭스
+    루프에서 KeyError로 크래시가 옮겨간다.
     """
     _require_sut()
     with tempfile.TemporaryDirectory() as tmp:
         r = subprocess.run([sys.executable, "-m", "kn_estimator.cli", str(SUT),
-                            "--mode", "template", "--model", "sonnet",
-                            "--w-hard", "200000", "--out-dir", tmp],
+                            "--mode", "template", "--model", "haiku",
+                            "--w-hard", "130000", "--out-dir", tmp],
                            capture_output=True, text=True, cwd=REPO)
         assert r.returncode == 0, f"크래시:\n{r.stderr[-600:]}"
         txt = (Path(tmp) / "kn-report.md").read_text()

@@ -128,7 +128,7 @@ def calibrate(ledger_path, runs_dir, include=None, min_runs=2):
         else:
             d_env, d_ep, t_env, t_ep, o_env, o_ep = tp
         # run 분산 밴드용 실측 비용은 셀의 최대 N(전체 규모 지점)에서 취한다.
-        # 구 구현은 n == 8 리터럴이었다 — LegacySut(최대 N=8) 전제가 새어나온 것으로,
+        # 구 구현은 n == 8 리터럴이었다 — 초기 캘리브레이션 SUT(최대 N=8) 전제가 새어나온 것으로,
         # 최대 N이 다른 프로젝트에서 빈 배열이 되어 밴드가 기본값으로 조용히 퇴화했다.
         max_n = max(r["n"] for r in runs)
         cells[key] = {

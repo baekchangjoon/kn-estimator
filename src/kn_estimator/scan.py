@@ -88,7 +88,7 @@ class _Index:
 
         네임스페이스 조인은 XML을 공용 디렉토리에 모아두는 프로젝트를 지원한다. 두 관용구를
         모두 다룬다 — 레거시 sqlSession(`selectOne("ns.stmt")`처럼 statement ID 접두어가
-        네임스페이스)과 mapper 인터페이스(네임스페이스가 FQCN). LegacySut는 전자다.
+        네임스페이스)과 mapper 인터페이스(네임스페이스가 FQCN) — 레거시 sqlSession 관용구를 쓰는 프로젝트가 전자다.
 
         네임스페이스로 아무것도 못 찾으면 기존 디렉토리 prefix 매칭으로 폴백한다 — 문자열
         상수가 아니라 다른 방식으로 SQL을 참조하는 코드가 있을 수 있다.

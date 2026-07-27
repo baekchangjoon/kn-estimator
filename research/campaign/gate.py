@@ -3,7 +3,7 @@
 ① 커버리지: .nimbus/artifacts/manifest.json에 요청 엔드포인트 전부 status=ok + 파일 실존
 ② 컴파일: 대상 프로젝트의 test-compile (targets.json의 compile 커맨드)
 
-원본의 ③ SQL/스텁 파싱은 MyBatis·LegacySut 전용이라 제외한다 (JPA 대상에는 대응물이
+원본의 ③ SQL/스텁 파싱은 MyBatis 레거시 SUT 전용이라 제외한다 (JPA 대상에는 대응물이
 없고, 컴파일 게이트가 산출물 형식 오류 대부분을 잡는다). 테스트 실행은 원본도 하지
 않는다 — 인프라(DB/Kafka) 불필요.
 """

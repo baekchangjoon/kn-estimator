@@ -14,5 +14,5 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -e '.[test]'
-      # SUT(legacy-sut)·외부 샘플 의존 테스트는 CI에서 skip된다 (로컬과 동일 규약)
+      # SUT(petclinic 사본)·외부 샘플 의존 테스트는 CI에서 skip된다 (로컬과 동일 규약)
       - run: python -m pytest tests/ -q

@@ -136,13 +136,13 @@ def main():
     ap.add_argument("--calibration")
     ap.add_argument("--w-soft", type=int, default=plan_mod.W_SOFT_DEFAULT)
     ap.add_argument("--w-hard", type=int, default=plan_mod.W_HARD_DEFAULT)
-    ap.add_argument("--conservative", action="store_true", help="W_soft=150K 보수 프리셋")
+    ap.add_argument("--conservative", action="store_true", help="W_soft=250K 보수 프리셋")
     ap.add_argument("--parallel", action="store_true")
     ap.add_argument("--groups", action="store_true",
                     help="비용 최적 생성 묶음을 '그룹N(EP, …)' 형태로 출력")
     ap.add_argument("--out-dir", default=".kn")
     args = ap.parse_args()
-    w_soft = 150_000 if args.conservative else args.w_soft
+    w_soft = 250_000 if args.conservative else args.w_soft
 
     cal = load_calibration(args.calibration)
 
@@ -205,7 +205,7 @@ def main():
     top = sorted(sls, key=lambda s: -s["w_tokens"])[:10]
     lines = [
         "# kn-estimator 보고서", "",
-        "> **절대 USD는 비보증** — 캘리브레이션은 단일 프로젝트(LegacySut) 실측 기반이며,",
+        "> **절대 USD는 비보증** — 캘리브레이션은 단일 프로젝트(tainted-spring-auth-user) 실측 기반이며,",
         "> 이 보고서의 주 용도는 모드·모델·청크 구성의 **상대 비교**다. 토큰 추정은 bytes/4",
         "> 근사(fallback)를 사용한다.", "",
         f"- 대상: `{args.project_root}`",
@@ -287,13 +287,13 @@ def main():
               + (f", 예측구간 ${interval[0]:,.0f}~${interval[1]:,.0f}" if interval else "")
               + ".")
     if not args.calibration:
-        # 자체 캘리브레이션 없이 = 동봉(LegacySut) 계수로 돌린 실행. 캘리브레이션은
+        # 자체 캘리브레이션 없이 = 동봉(tainted-spring-auth-user) 계수로 돌린 실행. 캘리브레이션은
         # 실측 run 원장이 필요해 도구가 자동 수행할 수 없다 — 고지가 자동화의 상한.
         # 처방은 실행 가능해야 한다: kn-calibrate의 env/ep 2점 분해에는 같은 셀에서
         # **크기가 다른** run 2개 이상이 필요하다 (그룹 1개면 insufficient_runs 또는
         # 기준 셀 부재로 셀이 산출되지 않는다). --groups 출력 뒤에 인쇄한다 — "플랜의
         # 그룹"이 이미 인쇄된 것을 가리키게.
-        print("ℹ 이 프로젝트의 자체 캘리브레이션이 없습니다 — 동봉(LegacySut) 계수로 "
+        print("ℹ 이 프로젝트의 자체 캘리브레이션이 없습니다 — 동봉(tainted-spring-auth-user) 계수로 "
               "추정했습니다 (상대 비교용, 절대 금액 비보증).\n"
               "  금액 정확도가 필요하면 파일럿 캘리브레이션부터: 같은 모드×모델로 "
               "크기가 다른 그룹 2개 이상 실측(예: EP 1개짜리 + 최소 그룹) → "

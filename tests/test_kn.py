@@ -5,11 +5,14 @@ from kn_estimator import calibrate, model, plan, scan
 
 # 경로 해석: ① 환경변수 오버라이드 → ② 저장소 상대 기본값 (이 파일 기준).
 # tests/ → 저장소 루트 = parents[1].
+# 기준 SUT는 petclinic 포크(비공개, gitignore 대상 ./petclinic 클론), 캘리브레이션
+# 원장은 동봉된 캠페인 실측(tainted-spring-auth-user)이다.
 REPO = Path(__file__).resolve().parents[1]
-SUT = Path(os.environ.get("KN_SUT") or REPO / "legacy-sut")
-LEDGER = Path(os.environ.get("KN_LEDGER") or REPO / "results/run_ledger.jsonl")
-RUNS = Path(os.environ.get("KN_RUNS") or REPO / "results/runs")
+SUT = Path(os.environ.get("KN_SUT") or REPO / "petclinic")
+LEDGER = Path(os.environ.get("KN_LEDGER") or REPO / "results/campaign/auth-user/run_ledger.jsonl")
+RUNS = Path(os.environ.get("KN_RUNS") or REPO / "results/campaign/auth-user/runs")
 SP = str(SUT)
+N_MAX = 5   # auth-user 캠페인의 최대 단일세션 N
 
 
 class SkipTest(unittest.SkipTest):
@@ -34,7 +37,7 @@ def _skip(reason, optional=False):
 
 
 def _require_sut():
-    """SUT(legacy-sut)는 gitignore 대상이라 부재할 수 있다 — 조용히 통과시키지 않는다."""
+    """SUT(petclinic 포크)는 gitignore 대상이라 부재할 수 있다 — 조용히 통과시키지 않는다."""
     if not SUT.exists():
         _skip(f"SUT 없음 ({SUT}) — KN_SUT 환경변수로 지정 가능")
 
@@ -44,29 +47,29 @@ def _require_sut():
 def test_inventory_count_matches_registered():
     _require_sut()
     eps = scan.inventory(SP)
-    assert len(eps) == 167, len(eps)
+    assert len(eps) == 18, len(eps)
 
 
-def test_slice_finds_service_dao_and_mybatis_xml():
+def test_slice_finds_controller_repository_and_entity():
+    """JPA 프로젝트의 슬라이스: 컨트롤러 + Spring Data 리포지토리 + 엔티티 1-hop."""
     _require_sut()
     eps = scan.inventory(SP)
-    mng = next(e for e in eps if e["path"] == "/web/super/admin/mngTerms" and e["method"] == "GET")
-    sl = scan.build_slices(SP, [mng])[0]
+    owner = next(e for e in eps if e["path"] == "/api/owners/{ownerId}" and e["method"] == "GET")
+    sl = scan.build_slices(SP, [owner])[0]
     files = "\n".join(sl["files"])
-    assert "MngTermsService.java" in files, files
-    assert "MngTermsDAO.java" in files, files
-    assert "sql/mngTerms.xml" in files, files
+    assert "OwnerRestController.java" in files, files
+    assert "OwnerRepository.java" in files, files
+    assert "Owner.java" in files, files
     assert sl["w_tokens"] > 1000
-    assert sl["unresolved"] == [] or all("DataSourceTransactionManager" in u or "." not in u
-                                          for u in sl["unresolved"])
+    assert sl["unresolved"] == [], sl["unresolved"]
 
 
 def test_controller_tokens_counted_once_per_controller_not_per_ep():
     _require_sut()
     eps = scan.inventory(SP)
-    quota = [e for e in eps if e["controller"] == "QuotaController"]
-    assert len(quota) >= 2
-    sls = scan.build_slices(SP, quota)
+    owners = [e for e in eps if e["controller"] == "OwnerRestController"]
+    assert len(owners) >= 2
+    sls = scan.build_slices(SP, owners)
     # 같은 컨트롤러의 EP들: 컨트롤러 본체 토큰은 shared_tokens로 분리, EP w에는 핸들러 span만
     for sl in sls:
         assert sl["handler_tokens"] < sl["controller_shared_tokens"], sl["endpoint"]["handler"]
@@ -80,10 +83,12 @@ def _cal():
 
 def test_calibration_cells_present_and_versioned():
     cal = _cal()
-    assert "flat/opus" in cal["cells"] and "template/sonnet" in cal["cells"]
-    assert cal["pricing"]["opus"]["input"] == 5.0
+    assert "template/sonnet" in cal["cells"] and "template/haiku" in cal["cells"] \
+        and "flat/sonnet" in cal["cells"]
+    assert "flat/opus" not in cal["cells"]   # 캠페인은 opus 미실측
+    assert cal["pricing"]["sonnet"]["input"] == 3.0
     assert cal["version"]
-    c = cal["cells"]["flat/opus"]
+    c = cal["cells"]["template/sonnet"]
     for k in ("S0", "tau_ep", "delta_ep", "out_ep", "tau_env", "delta_env", "out_env"):
         assert k in c, k
 
@@ -91,8 +96,9 @@ def test_calibration_cells_present_and_versioned():
 def test_uncalibrated_cell_is_flagged():
     cal = _cal()
     # 존재하지 않는 조합은 insufficient_calibration으로 표시되어야 함
-    est = model.estimate_cell(cal, "batched", "haiku", [1.0] * 8)
-    assert est.get("status") == "insufficient_calibration"
+    for mode, mdl in (("batched", "haiku"), ("flat", "opus")):
+        est = model.estimate_cell(cal, mode, mdl, [1.0] * 8)
+        assert est.get("status") == "insufficient_calibration", (mode, mdl)
 
 
 # ---- model: hold-out & coverage ---------------------------------------------
@@ -100,53 +106,53 @@ def test_uncalibrated_cell_is_flagged():
 def _measured(arm, n):
     rows = [json.loads(l) for l in (LEDGER).read_text().splitlines()]
     return [r["cost_usd"] for r in rows if r["variant"] == arm and r.get("n") == n
-            and r["role"] == "run_total" and r.get("rep") in (1, 2, 3)]
+            and r["role"] == "run_total" and r.get("gate") == "pass"
+            and r.get("rep") in (1, 2, 3)]
 
 
-def test_holdout_fit_partial_predict_rest_flat_opus():
-    # N=1 전체 + N=8 rep1로 fit → N=8 예측이 실측 3회 [min,max] 안
+def test_holdout_fit_partial_predict_rest_template_sonnet():
+    # N=1 전체 + N=5 rep1로 fit → N=5 예측이 실측 [min,max]·(0.8,1.2) 안
     cal = calibrate.calibrate(LEDGER, RUNS,
-                              include=lambda r: not (r["variant"] == "flat" and r["n"] == 8
+                              include=lambda r: not (r["variant"] == "flat_template_sonnet"
+                                                     and r["n"] == N_MAX
                                                      and r["rep"] in (2, 3)))
-    est = model.estimate_cell(cal, "flat", "opus", [1.0] * 8)
-    lo, hi = min(_measured("flat", 8)), max(_measured("flat", 8))
+    est = model.estimate_cell(cal, "template", "sonnet", [1.0] * N_MAX)
+    lo, hi = min(_measured("flat_template_sonnet", N_MAX)), max(_measured("flat_template_sonnet", N_MAX))
     assert lo * 0.8 <= est["cost_usd"] <= hi * 1.2, (est["cost_usd"], lo, hi)
 
 
 def test_order_preservation():
     cal = _cal()
-    w = [1.0] * 8
-    f_o = model.estimate_cell(cal, "flat", "opus", w)["cost_usd"]
-    f_s = model.estimate_cell(cal, "flat", "sonnet", w)["cost_usd"]
-    t_o = model.estimate_cell(cal, "template", "opus", w)["cost_usd"]
+    w = [1.0] * N_MAX
     t_s = model.estimate_cell(cal, "template", "sonnet", w)["cost_usd"]
-    assert t_o < f_o and t_s < f_s, (t_o, f_o, t_s, f_s)
-    assert f_o < f_s, (f_o, f_s)
+    t_h = model.estimate_cell(cal, "template", "haiku", w)["cost_usd"]
+    f_s = model.estimate_cell(cal, "flat", "sonnet", w)["cost_usd"]
+    # 캠페인 실측 순서: haiku ≪ sonnet, 그리고 이 규모(N=5)에서는 flat < template
+    # (template의 인프라 구축 고정비가 EP당 절감을 압도 — 캠페인 §3)
+    assert t_h < t_s, (t_h, t_s)
+    assert f_s < t_s, (f_s, t_s)
 
 
 def test_loo_prediction_interval_coverage():
     # 각 셀: rep 하나를 빼고 fit → 빠진 rep이 α-민감도 예측구간 안에 드는 비율 ≥ 2/3
     hits = tot = 0
-    for arm, cell in (("flat", ("flat", "opus")), ("flat_template", ("template", "opus")),
-                      ("flat_sonnet", ("flat", "sonnet")),
-                      ("flat_template_sonnet", ("template", "sonnet"))):
-        for held in (1, 2, 3):
+    for arm, cell in (("flat_template_sonnet", ("template", "sonnet")),
+                      ("flat_template_haiku", ("template", "haiku")),
+                      ("flat_sonnet", ("flat", "sonnet"))):
+        measured = _measured(arm, N_MAX)
+        for held in range(1, len(measured) + 1):
             cal = calibrate.calibrate(
                 LEDGER, RUNS,
-                include=lambda r, a=arm, h=held: not (r["variant"] == a and r["n"] == 8
+                include=lambda r, a=arm, h=held: not (r["variant"] == a and r["n"] == N_MAX
                                                       and r["rep"] == h))
-            est = model.estimate_cell(cal, cell[0], cell[1], [1.0] * 8)
+            est = model.estimate_cell(cal, cell[0], cell[1], [1.0] * N_MAX)
             if est.get("status"):
                 continue
-            actual = [json.loads(l)["cost_usd"] for l in
-                      (LEDGER).read_text().splitlines()
-                      if f'"run_id": "{arm}-n8-r{held}"' in l.replace('": "', '": "')
-                      and '"run_total"' in l]
-            actual = _measured(arm, 8)[held - 1] if not actual else actual[0]
+            actual = measured[held - 1]
             tot += 1
             if est["pi_low"] <= actual <= est["pi_high"]:
                 hits += 1
-    assert tot >= 10 and hits / tot >= 2 / 3, (hits, tot)
+    assert tot >= 7 and hits / tot >= 2 / 3, (hits, tot)
 
 
 # ---- plan --------------------------------------------------------------------
@@ -162,7 +168,7 @@ def test_partition_covers_all_and_respects_walls():
     assert len(all_eps) == len(sls) and len(set(all_eps)) == len(all_eps)
     for c in p["chunks"]:
         assert c["est_peak_context"] <= p["w_hard"], (c["est_peak_context"], p["w_hard"])
-    assert p["n_chunks"] >= 2  # 167개면 반드시 다청크
+    assert p["n_chunks"] >= 2  # 18개면 다청크
     assert p["total_cost_usd"] > 0
 
 
@@ -186,7 +192,7 @@ def test_cost_is_scale_invariant_in_w():
 
 
 def test_smoke_external_project():
-    # graph-rag 샘플: 크래시 없이 N·플랜 산출 (경로 없으면 skip)
+    # 외부 샘플: 크래시 없이 N·플랜 산출 (경로 없으면 skip)
     # 경로는 KN_EXTERNAL_SAMPLE로 지정한다. 기존 하드코딩은 타 세션 스크래치패드를
     # 가리켜 항상 SKIP됐다 (실효 커버리지 0).
     ext_env = os.environ.get("KN_EXTERNAL_SAMPLE")

@@ -75,7 +75,7 @@ SPRING_DATA_EXTENDS_RE = re.compile(
 
 ### 행위 보존
 
-- MyBatis 프로젝트(LegacySut 포함): DAO가 `*Repository<T, ID>`를 상속하지 않으므로
+- MyBatis 프로젝트(레거시 SUT 포함): DAO가 `*Repository<T, ID>`를 상속하지 않으므로
   신규 분기에 진입하지 않는다 — **골든 수치 불변**이 게이트다.
 - w는 상대 공변량이므로(스케일 불변) JPA 가산의 효과는 EP 간 상대 순위·파티션 경로다.
 
