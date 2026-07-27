@@ -21,8 +21,10 @@ N(엔드포인트 수)·w_i(EP별 작업량)·청크 플랜(FFD)·예상 비용/
 python3.12 -m venv .venv && .venv/bin/pip install -e '.[test]'
 .venv/bin/kn-estimate petclinic --mode template --model sonnet
 # → N=18 chunks=3 k_avg=6.0 est=$21.18, petclinic/.kn/{kn-report.md,kn-plan.json}
-#   골든: kn-plan.json sha256 e3f96f19ce5ab11f…, kn-report.md 18427390718262f6…
-#   (PYTHONHASHSEED 무관 바이트 일치 — 결정성 검증됨)
+#   골든: kn-plan.json sha256 e3f96f19ce5ab11f…, kn-report.md 425b6cbde6a5ddcb…
+#   (PYTHONHASHSEED 무관 바이트 일치 — 결정성 검증됨. 주의: 보고서는 `대상:` 줄에
+#    project_root 인자를 그대로 박으므로 **위 명령의 상대경로 그대로** 실행해야
+#    해시가 일치한다. kn-plan.json은 경로 무관.)
 .venv/bin/python -m pytest tests/   # SUT 없이 67 passed, SUT 있으면 80 passed
 ```
 

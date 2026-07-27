@@ -124,7 +124,7 @@ kn-estimate <project_root> [옵션]
 | `--mode flat\|template` | template | 생성 모드 |
 | `--model opus\|sonnet\|haiku` | sonnet | 대상 모델 (미캘리브레이션 셀은 `insufficient_calibration` 표기) |
 | `--groups` | off | 비용 최적 생성 묶음을 "그룹N(EP, …)" 실행 지시 형태로 출력 |
-| `--calibration <path>` | 동봉본 | 자체 캘리브레이션 파일 사용 |
+| `--calibration <path\|이름>` | 동봉본(auth-user) | 캘리브레이션 파일 경로 또는 동봉 번들 이름(`petclinic`\|`community`\|`auth-user`) |
 | `--w-soft <n>` | 330000 | 품질 정책 벽 (초과 시 패널티+경고, 유효 W_hard로 캡) |
 | `--w-hard <n>` | 900000 | 모델 상한 벽 (모델별 윈도우×0.9로 자동 캡 — haiku 180K) |
 | `--conservative` | off | W_soft=250K 보수 프리셋 |

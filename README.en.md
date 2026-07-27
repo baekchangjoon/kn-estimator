@@ -126,7 +126,7 @@ kn-estimate <project_root> [options]
 | `--mode flat\|template` | template | Generation mode |
 | `--model opus\|sonnet\|haiku` | sonnet | Target model (uncalibrated cells are reported as `insufficient_calibration`) |
 | `--groups` | off | Print the cost-optimal batches as runnable "groupN(EP, …)" instructions |
-| `--calibration <path>` | bundled | Use a project-specific calibration file |
+| `--calibration <path\|name>` | bundled (auth-user) | Calibration file path or a bundled name (`petclinic`\|`community`\|`auth-user`) |
 | `--w-soft <n>` | 330000 | Quality-policy wall (penalty + warning above it; capped at the effective W_hard) |
 | `--w-hard <n>` | 900000 | Model ceiling wall (auto-capped at 0.9× the model window — 180K for haiku) |
 | `--conservative` | off | W_soft=250K preset |
