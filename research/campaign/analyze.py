@@ -3,7 +3,7 @@
 ① kn_estimator.calibrate를 캠페인 원장에 적용해 프로젝트별 calibration을 만들고,
    동봉(레거시 SUT) 계수와 나란히 놓는다 — "계수가 프로젝트마다 얼마나 다른가"가
    이 캠페인의 1차 질문이다.
-② research/per_ep_covariate.py의 복원 방법(template 모드: Write 1건 = EP 1개)을
+② research/per_ep_covariate.py(제거됨 — 방법론 출처 기록)의 복원 방법(template 모드: Write 1건 = EP 1개)을
    여러 프로젝트에 일반화해 EP별 (w, δ, out) 관측을 풀링하고 α를 로그선형 fit한다.
    레거시 SUT 단독 검정(w 범위 24.3배, EP 8개)의 확장이다.
 
