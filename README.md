@@ -4,6 +4,7 @@
 
 <p align="center">
   <a href="https://github.com/baekchangjoon/kn-estimator/actions/workflows/tests.yml"><img alt="tests" src="https://github.com/baekchangjoon/kn-estimator/actions/workflows/tests.yml/badge.svg"></a>
+  <a href="https://github.com/baekchangjoon/kn-estimator/releases"><img alt="release" src="https://img.shields.io/github/v/release/baekchangjoon/kn-estimator?display_name=release&label=release"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-yellow.svg"></a>
   <img alt="Python" src="https://img.shields.io/badge/Python-3.9%2B-blue">
   <img alt="Dependencies" src="https://img.shields.io/badge/dependencies-stdlib%20only-informational">
@@ -24,11 +25,33 @@
 
 ## 설치
 
+파이썬이 없어도 됩니다 — 권장 경로는 [uv](https://docs.astral.sh/uv/)입니다
+(uv가 필요한 CPython을 자동으로 받아 관리합니다):
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh    # uv 1회 설치
+uvx --from git+https://github.com/baekchangjoon/kn-estimator kn-estimate <spring-project> --groups
+```
+
+**Homebrew** (macOS/Linux):
+
+```bash
+brew install baekchangjoon/tap/kn-estimator
+```
+
+**Docker** (GHCR — 대상 프로젝트를 볼륨으로 마운트):
+
+```bash
+docker run --rm -v "$PWD:/w" ghcr.io/baekchangjoon/kn-estimator /w --groups
+```
+
+**pip** (파이썬 3.9+가 이미 있다면):
+
 ```bash
 pip install git+https://github.com/baekchangjoon/kn-estimator
 ```
 
-Python 3.9 이상이면 동작하고, 표준 라이브러리만 사용합니다. 개발용 설치는:
+표준 라이브러리만 사용하므로 별도 의존성은 없습니다. 개발용 설치는:
 
 ```bash
 git clone https://github.com/baekchangjoon/kn-estimator && cd kn-estimator
