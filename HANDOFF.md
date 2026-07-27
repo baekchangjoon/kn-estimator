@@ -23,7 +23,7 @@ python3.12 -m venv .venv && .venv/bin/pip install -e '.[test]'
 # → N=18 chunks=3 k_avg=6.0 est=$21.18, petclinic/.kn/{kn-report.md,kn-plan.json}
 #   골든: kn-plan.json sha256 e3f96f19ce5ab11f…, kn-report.md 18427390718262f6…
 #   (PYTHONHASHSEED 무관 바이트 일치 — 결정성 검증됨)
-.venv/bin/python -m pytest tests/   # SUT 없이 45 passed, SUT 있으면 58 passed
+.venv/bin/python -m pytest tests/   # SUT 없이 67 passed, SUT 있으면 80 passed
 ```
 
 | 자산 | 위치 | 유래 |

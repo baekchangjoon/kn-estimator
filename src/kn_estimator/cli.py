@@ -34,6 +34,10 @@ def load_calibration(path=None):
                        else HERE / f"data/calibration-{path}.json")
             if bundled.exists():
                 p = bundled
+            else:
+                raise SystemExit(
+                    f"'{path}'는 파일도 동봉 번들 이름도 아니다 — 동봉 번들: "
+                    "auth-user(기본), petclinic, community. 또는 캘리브레이션 파일 경로를 지정하라.")
         if not p.exists():
             raise SystemExit(f"--calibration 경로를 찾을 수 없다: {p}")
     else:
@@ -137,18 +141,32 @@ def build_matrix(sls, cal, w_hard, w_soft, parallel=False):   # 인자 순서 = 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("project_root")
-    ap.add_argument("--mode", default="template", choices=["template", "flat"])
-    ap.add_argument("--model", default="sonnet", choices=["sonnet", "opus", "haiku"])
-    ap.add_argument("--calibration")
-    ap.add_argument("--w-soft", type=int, default=plan_mod.W_SOFT_DEFAULT)
-    ap.add_argument("--w-hard", type=int, default=plan_mod.W_HARD_DEFAULT)
+    ap.add_argument("project_root", help="스캔할 Spring 프로젝트 루트 디렉토리")
+    ap.add_argument("--mode", default="template", choices=["template", "flat"],
+                    help="생성 모드 (기본 template)")
+    ap.add_argument("--model", default="sonnet", choices=["sonnet", "opus", "haiku"],
+                    help="대상 모델 (기본 sonnet; 미캘리브레이션 셀은 수치 미제공)")
+    ap.add_argument("--calibration",
+                    help="캘리브레이션 파일 경로 또는 동봉 번들 이름 "
+                         "(auth-user[기본]|petclinic|community)")
+    ap.add_argument("--w-soft", type=int, default=plan_mod.W_SOFT_DEFAULT,
+                    help=f"품질 정책 벽 (기본 {plan_mod.W_SOFT_DEFAULT:,}; 유효 W_hard로 캡)")
+    ap.add_argument("--w-hard", type=int, default=plan_mod.W_HARD_DEFAULT,
+                    help=f"모델 상한 벽 (기본 {plan_mod.W_HARD_DEFAULT:,}; 모델 윈도우×0.9로 캡)")
     ap.add_argument("--conservative", action="store_true", help="W_soft=250K 보수 프리셋")
-    ap.add_argument("--parallel", action="store_true")
+    ap.add_argument("--parallel", action="store_true",
+                    help="청크 병렬 실행 가정 (벽시계=max, cache_write 5% 할증)")
     ap.add_argument("--groups", action="store_true",
                     help="비용 최적 생성 묶음을 '그룹N(EP, …)' 형태로 출력")
-    ap.add_argument("--out-dir", default=".kn")
+    ap.add_argument("--out-dir", default=".kn",
+                    help="산출물 디렉토리 (기본 .kn — 프로젝트 루트 기준 상대 또는 절대 경로)")
     args = ap.parse_args()
+    if args.w_soft <= 0 or args.w_hard <= 0:
+        raise SystemExit("--w-soft/--w-hard 는 양수여야 한다 "
+                         f"(받은 값: w_soft={args.w_soft}, w_hard={args.w_hard})")
+    root = Path(args.project_root)
+    if not root.is_dir():
+        raise SystemExit(f"프로젝트 경로가 없거나 디렉토리가 아니다: {root}")
     w_soft = 250_000 if args.conservative else args.w_soft
 
     cal = load_calibration(args.calibration)
@@ -248,6 +266,11 @@ def main():
             lines.append(f"| {key} | {v} | — | — | — |")
         else:
             lines.append(f"| {key} | ${v['total_cost_usd']} | {v['n_chunks']} | {v['k_avg']} | {v['wall_h']}h |")
+    if any(isinstance(v, dict) for k, v in matrix.items() if k.endswith("/haiku")):
+        lines += ["",
+                  "> ⚠ haiku 최저가에는 **검증 통과율 리스크**가 따른다 — 캠페인 실측에서"
+                  " 소형 프로젝트 게이트 전멸 사례(petclinic template/haiku 0/6)가 있었다."
+                  " 금액만으로 선택하지 말 것 (docs/GUIDE.md §4.3)."]
     lines += ["", "## 컨트롤러 단위", "",
               "> n·Σw·배정 청크는 컨트롤러별로 산출하지만, 비용 계수(a,b,c)는 셀 전역"
               " 하나다 — 컨트롤러 소속의 분산 설명력 검정(research/unit_variance.py)에서"

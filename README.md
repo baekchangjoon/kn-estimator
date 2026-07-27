@@ -45,6 +45,8 @@ brew install baekchangjoon/tap/kn-estimator
 docker run --rm -v "$PWD:/w" ghcr.io/baekchangjoon/kn-estimator /w --groups
 ```
 
+> 출력의 `/w`는 컨테이너 내 마운트 경로입니다 — 산출물은 호스트의 `$PWD/.kn`에 생성됩니다.
+
 **pip** (파이썬 3.9+가 이미 있다면):
 
 ```bash
@@ -127,7 +129,7 @@ kn-estimate <project_root> [옵션]
 | `--w-hard <n>` | 900000 | 모델 상한 벽 (모델별 윈도우×0.9로 자동 캡 — haiku 180K) |
 | `--conservative` | off | W_soft=250K 보수 프리셋 |
 | `--parallel` | off | 청크 병렬 실행 가정 (벽시계=max, cache_write 5% 할증) |
-| `--out-dir <name>` | `.kn` | 산출물 디렉토리 이름 |
+| `--out-dir <path>` | `.kn` | 산출물 디렉토리 — 프로젝트 루트 기준 상대 또는 절대 경로 |
 
 ## 캘리브레이션
 
@@ -163,7 +165,7 @@ src/kn_estimator/
 docs/                    # 가이드·수식 유도·설계·실측 캠페인·연구 노트
 results/                 # 캘리브레이션 원장·트랜스크립트 (재현용 원자료)
 research/                # 검정 스크립트 (w 공변량, 단위별 계수 분화)
-tests/                   # pytest — SUT 없이 45건, SUT 있으면 +13건
+tests/                   # pytest — SUT 없이 67건, SUT 있으면 +13건
 ```
 
 ## 테스트
@@ -174,7 +176,7 @@ tests/                   # pytest — SUT 없이 45건, SUT 있으면 +13건
 
 SUT(petclinic 포크)·외부 샘플 의존 테스트는 해당 경로가 없으면 건너뜁니다
 (`KN_SUT`, `KN_EXTERNAL_SAMPLE`, `KN_LEDGER`/`KN_RUNS` 환경변수로 지정 가능).
-나머지 45건은 환경 무관이며 CI(GitHub Actions)가 push·PR마다 실행합니다.
+나머지 67건은 환경 무관이며 CI(GitHub Actions)가 push·PR마다 실행합니다.
 
 ## 문서
 

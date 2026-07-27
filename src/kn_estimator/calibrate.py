@@ -38,8 +38,24 @@ def _turn_stats(tr_path):
     return len(ctxs), (ctxs[0] if ctxs else 0), (max(ctxs) if ctxs else 0)
 
 
+def _load_ledger(ledger_path):
+    """원장 로드 — 부재·깨진 줄을 raw traceback 대신 원인·위치와 함께 알린다."""
+    p = Path(ledger_path)
+    if not p.exists():
+        raise SystemExit(f"원장을 찾을 수 없다: {p}")
+    rows = []
+    for lineno, line in enumerate(p.read_text().splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            rows.append(json.loads(line))
+        except json.JSONDecodeError as e:
+            raise SystemExit(f"원장 파싱 실패: {p}:{lineno}: {e}")
+    return rows
+
+
 def calibrate(ledger_path, runs_dir, include=None, min_runs=2):
-    rows = [json.loads(l) for l in Path(ledger_path).read_text().splitlines()]
+    rows = _load_ledger(ledger_path)
     # 게이트 통과 run만 — 실패 run은 조기 종료로 비용이 과소해 계수를 오염시킨다.
     # 사후 재판정(측정 인프라 위양성)된 run은 gate-adjudications.json으로 구제.
     # 걸러진 사유는 셀별로 집계한다 — 셀의 run이 전부 걸러지면(캠페인 실측: haiku
@@ -161,6 +177,13 @@ def main(argv=None):
     ap.add_argument("--out", type=Path, help="출력 경로 (생략 시 stdout)")
     args = ap.parse_args(argv)
     cal = calibrate(args.ledger, args.runs)
+    if not cal["cells"]:
+        # 조용한 실패 금지 — cells가 비면 파이프라인이 성공으로 오인하고, 그 파일을
+        # 물린 kn-estimate만 뒤늦게 죽는다.
+        raise SystemExit(
+            "사용 가능한 run이 0건 — 셀이 산출되지 않았다 "
+            f"(제외 사유: {cal['skipped_cells'] or '기록 없음 — 원장에 매칭 run 자체가 없음'}). "
+            "원장의 variant/gate/n 필드와 --runs 트랜스크립트 경로를 확인하라 (docs/GUIDE.md §4.4).")
     for cell, why in cal["skipped_cells"].items():
         print(f"경고: 셀 {cell} 제외 — {why}", file=sys.stderr)
     text = json.dumps(cal, indent=1, ensure_ascii=False)
