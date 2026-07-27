@@ -9,8 +9,9 @@
 1. 캠페인 per-EP 관측 103건 (`results/campaign/analysis/alpha-observations.json`,
    project/ep/out/delta). EP→컨트롤러 매핑은 대상 저장소를 스캔해 얻는다
    (`--repo <project>=<path>` 인자, 반복 지정).
-2. SmartPlant template run 6건의 트랜스크립트 — 초기 프롬프트에 controller가
-   명시돼 있어 SUT 없이 복원 가능 (out: 산출물 Write 바이트, δ: Write 간 컨텍스트 차).
+(레거시 SUT의 관측 복원부는 원 트랜스크립트가 저장소에서 제거되며 함께
+제거됐다 — 그 결과는 docs/2026-07-26-cost-curve-and-unit-coefficients.md §3에
+기록으로 남아 있다.)
 
 방법: run 반복을 EP 중앙값으로 접고(EP가 독립 표본 단위), 컨트롤러로 그룹핑해
 일원 분산분석 — η²(집단간 분산 비율)와 순열검정 p값(라벨 셔플 10,000회, seed 0).
@@ -32,43 +33,12 @@ from kn_estimator import scan
 
 REPO = Path(__file__).resolve().parents[1]
 CAMPAIGN_OBS = REPO / "results/campaign/analysis/alpha-observations.json"
-SMARTPLANT_RUNS = ["flat_template-n8-r1", "flat_template-n8-r2", "flat_template-n8-r3",
-                   "flat_template_sonnet-n8-r1", "flat_template_sonnet-n8-r2",
-                   "flat_template_sonnet-n8-r3"]
 
 
 def controller_map(repo_path):
     """저장소 스캔 → {"METHOD /path": controller 클래스명}."""
     return {f"{e['method']} {e['path']}": Path(e["file"]).stem
             for e in scan.inventory(str(repo_path))}
-
-
-def smartplant_observations():
-    """SUT 없이 트랜스크립트만으로 (ep, controller, out, delta) 복원."""
-    import per_ep_covariate as pec
-    rows = []
-    for run in SMARTPLANT_RUNS:
-        tr = REPO / "results/runs" / run / "transcript.jsonl"
-        if not tr.exists():
-            continue
-        recs = pec._records(run)
-        eps = pec.prompt_endpoints(recs)
-        writes = pec.artifact_writes(recs)
-        pairs = pec.match_endpoints(eps, [n for n, _, _ in writes])
-        ctrl = {f"{e['method']} {e['path']}": e["controller"] for e in eps}
-        by_name = {n: k for k, n in pairs.items()}
-        for i, (name, nbytes, ctx) in enumerate(writes):
-            key = by_name.get(name)
-            if not key:
-                continue
-            delta = None
-            if i > 0:
-                d = ctx - writes[i - 1][2]
-                if d > 0:
-                    delta = d
-            rows.append({"project": "smartplant", "ep": key,
-                         "controller": ctrl[key], "out": nbytes, "delta": delta})
-    return rows
 
 
 def anova(groups):
@@ -176,10 +146,6 @@ def main():
             print(f"  {project}: 매핑 실패 {unmapped}건 제외")
             rows = [r for r in rows if r["controller"] != "?"]
         test_project(project, rows, results)
-
-    sp = smartplant_observations()
-    if sp:
-        test_project("smartplant", sp, results)
 
     if args.out:
         args.out.write_text(json.dumps(results, ensure_ascii=False, indent=1))

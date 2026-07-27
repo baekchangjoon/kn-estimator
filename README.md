@@ -44,14 +44,15 @@ kn-estimate <spring-project-root> --groups
 실행 예 (실측 출력):
 
 ```text
-N=5 chunks=2 k_avg=2.5 est=$4.74
+N=18 chunks=3 k_avg=6.0 est=$21.18
 
-[tainted-spring-auth-user] 비용 최적 생성 묶음 (template×sonnet):
-  그룹1(POST /internal/auth/verify, GET /internal/users/{id}, GET /api/v1/me) — $2.6, peak 177,370
-  그룹2(POST /api/v1/auth/login, POST /api/v1/auth/guest) — $2.14, peak 157,952
-위 2개 그룹을 각각 **새 독립 세션**으로 돌리세요 — 세션을 이어가면 비용이 2차로
-돌아갑니다. 예상 총 $4.74, 예측구간 $3~$7.
-ℹ 이 프로젝트의 자체 캘리브레이션이 없습니다 — 동봉(SmartPlant) 계수로 추정했습니다 …
+[spring-petclinic] 비용 최적 생성 묶음 (template×sonnet):
+  그룹1(POST /api/reservations, GET /api/reservations/{id}, …) — $6.93, peak 295,105
+  그룹2(GET /api/pets/types, GET /api/pets/{petId}, …) — $7.08, peak 301,767
+  그룹3(GET /api/owners, GET /api/owners/{ownerId}, …) — $7.17, peak 305,431
+위 3개 그룹을 각각 **새 독립 세션**으로 돌리세요 — 세션을 이어가면 비용이 2차로
+돌아갑니다. 예상 총 $21.18, 예측구간 $15~$28.
+ℹ 이 프로젝트의 자체 캘리브레이션이 없습니다 — 동봉(tainted-spring-auth-user) 계수로 추정했습니다 …
 ```
 
 각 그룹을 새 독립 세션 하나로 실행하면 지출이 엔드포인트 수 N에 선형이 됩니다.
@@ -99,16 +100,18 @@ kn-estimate <project_root> [옵션]
 | `--model opus\|sonnet\|haiku` | sonnet | 대상 모델 (미캘리브레이션 셀은 `insufficient_calibration` 표기) |
 | `--groups` | off | 비용 최적 생성 묶음을 "그룹N(EP, …)" 실행 지시 형태로 출력 |
 | `--calibration <path>` | 동봉본 | 자체 캘리브레이션 파일 사용 |
-| `--w-soft <n>` | 180000 | 품질 정책 벽 (초과 시 패널티+경고, 유효 W_hard로 캡) |
+| `--w-soft <n>` | 330000 | 품질 정책 벽 (초과 시 패널티+경고, 유효 W_hard로 캡) |
 | `--w-hard <n>` | 900000 | 모델 상한 벽 (모델별 윈도우×0.9로 자동 캡 — haiku 180K) |
-| `--conservative` | off | W_soft=150K 보수 프리셋 |
+| `--conservative` | off | W_soft=250K 보수 프리셋 |
 | `--parallel` | off | 청크 병렬 실행 가정 (벽시계=max, cache_write 5% 할증) |
 | `--out-dir <name>` | `.kn` | 산출물 디렉토리 이름 |
 
 ## 캘리브레이션
 
-동봉 캘리브레이션(실측 18 run, 5셀)으로 별도 데이터 없이 바로 동작합니다. 단
-동봉 계수는 단일 프로젝트(SmartPlant) 실측이라 **절대 USD는 보증하지 않습니다** —
+동봉 캘리브레이션(tainted-spring-auth-user 실측 17 run, 3셀 — opus 미실측)으로 별도
+데이터 없이 바로 동작하고, petclinic·tainted-spring-community 캘리브레이션도
+`data/`에 동봉돼 `--calibration`으로 선택할 수 있습니다. 단 동봉 계수는 단일
+프로젝트 실측이라 **절대 USD는 보증하지 않습니다** —
 다중 프로젝트 실측(54 run)에서 동봉 계수 그대로는 오차 −23~−34%, 파일럿
 재캘리브레이션 후 ±10%였습니다. `--calibration` 없이 실행하면 CLI가 이 사실과
 파일럿 절차를 고지합니다:
@@ -133,11 +136,11 @@ src/kn_estimator/
   plan.py                # 컨트롤러 친화 FFD 파티션, 이층 벽(W_soft/W_hard), K*, 비용 곡선
   calibrate.py           # 실측 원장 → 셀별 계수 (kn-calibrate)
   cli.py                 # kn-estimate — 보고서·플랜·매트릭스·그룹 출력
-  data/calibration.json  # 동봉 캘리브레이션 (SmartPlant 실측 18 run)
+  data/calibration*.json # 동봉 캘리브레이션 (캠페인 실측 — 기본 auth-user + petclinic/community)
 docs/                    # 가이드·수식 유도·설계·실측 캠페인·연구 노트
 results/                 # 캘리브레이션 원장·트랜스크립트 (재현용 원자료)
 research/                # 검정 스크립트 (w 공변량, 단위별 계수 분화)
-tests/                   # pytest — SUT 없이 42건, SUT 있으면 +15건
+tests/                   # pytest — SUT 없이 43건, SUT 있으면 +13건
 ```
 
 ## 테스트
@@ -146,9 +149,9 @@ tests/                   # pytest — SUT 없이 42건, SUT 있으면 +15건
 .venv/bin/python -m pytest tests/
 ```
 
-SUT(SmartPlant)·외부 샘플 의존 테스트 15건은 해당 경로가 없으면 건너뜁니다
+SUT(petclinic 포크)·외부 샘플 의존 테스트는 해당 경로가 없으면 건너뜁니다
 (`KN_SUT`, `KN_EXTERNAL_SAMPLE`, `KN_LEDGER`/`KN_RUNS` 환경변수로 지정 가능).
-나머지 42건은 환경 무관이며 CI(GitHub Actions)가 push·PR마다 실행합니다.
+나머지 43건은 환경 무관이며 CI(GitHub Actions)가 push·PR마다 실행합니다.
 
 ## 문서
 

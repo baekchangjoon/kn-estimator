@@ -16,7 +16,7 @@ import unittest
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-SUT = Path(os.environ.get("KN_SUT") or (REPO / "smartplant"))
+SUT = Path(os.environ.get("KN_SUT") or (REPO / "petclinic"))
 
 
 class SkipTest(unittest.SkipTest):

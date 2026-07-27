@@ -8,7 +8,7 @@
 
 ## 1. 왜 필요한가 (문제 정의)
 
-실측 43 run(SmartPlant, `results/run_ledger.jsonl`)에서 확인된 사실:
+실측 run(초기 레거시 SUT 43 run + 2026-07 캠페인 54 run — 동봉 원장은 `results/campaign/`)에서 확인된 사실:
 
 1. **단일 LLM 세션의 비용은 엔드포인트 수 N에 대해 2차(quadratic)로 증가한다.**
    세션이 엔드포인트를 처리할수록 도구 결과가 대화에 누적되고(엔드포인트당 +16~26K
@@ -56,7 +56,7 @@ cache write 2.0x·read 0.1x — Claude Code 1h 캐시)이며 calibration.json에
 
 ### 2.2 프로젝트 간 이전 — w 공변량
 
-캘리브레이션은 특정 프로젝트(SmartPlant) 실측이므로, 대상 프로젝트의 엔드포인트가
+캘리브레이션은 특정 프로젝트(동봉 기본: tainted-spring-auth-user) 실측이므로, 대상 프로젝트의 엔드포인트가
 더 무겁거나 가벼우면 보정이 필요하다. 엔드포인트 i의 정적 작업량 `w_i`(§3.2)를
 프로젝트 평균으로 나눈 상대값 `ŵ_i`로 δ·out·τ를 곱셈 스케일한다:
 
@@ -75,9 +75,10 @@ cache write 2.0x·read 0.1x — Claude Code 1h 캐시)이며 calibration.json에
 - **W_hard** (기본 900K): 모델 컨텍스트 상한 — 어떤 청크도 초과 불가. 모델별
   윈도우의 90%로 자동 캡된다 (opus/sonnet 1M→900K, haiku 200K→180K) — `--w-hard`를
   더 크게 줘도 모델 상한을 넘길 수 없다. 보고서·플랜의 `w_hard`는 캡 적용 후 유효값.
-- **W_soft** (기본 180K): 품질 정책 벽 — 실측에서 게이트 통과 세션의 종료 컨텍스트
-  분포(p50)로 역산한 값. 초과 시 비용에 15% 패널티를 부과하고 보고서에 경고
-  (컴팩션·후반부 품질 저하 리스크). `--conservative`로 150K 프리셋. 유효 W_hard보다
+- **W_soft** (기본 330K): 품질 정책 벽 — 동봉(캠페인) 캘리브레이션 세대의 게이트 통과
+  세션 종료 컨텍스트 분포(max≈329K)로 역산한 값. 현세대 env 고정분(S0+δ_env≈178K)이
+  구 기본값 180K를 채워 파티션이 퇴화하던 문제(F7)의 방지값이다. 초과 시 비용에 15% 패널티를 부과하고 보고서에 경고
+  (컴팩션·후반부 품질 저하 리스크). `--conservative`로 250K 프리셋. 유효 W_hard보다
   크게 주면 유효 W_hard로 캡된다 (예: haiku에 `--w-soft 400000` → 180K로 재해석,
   보고서에 캡 사실 표기).
 - 파티션 생성: 컨트롤러 단위로 묶고(같은 컨트롤러의 EP는 분석 컨텍스트를 공유하므로)
@@ -136,14 +137,14 @@ Spring 컨트롤러를 정규식 스캔해 JSON 응답 핸들러만 채택한다
 
 ### ③ 캘리브레이션
 
-기본값은 패키지에 동봉된 사전 산출 캘리브레이션(`data/calibration.json`)이다. 계수에 반영된 run은 18건이다 (flat/opus 6, flat/sonnet 3, template/opus 3, template/sonnet 3, template/haiku 3). 자체 실측이 쌓이면:
+기본값은 패키지에 동봉된 사전 산출 캘리브레이션(`data/calibration.json` — tainted-spring-auth-user 캠페인 실측 17 run, 3셀: template/sonnet 6·template/haiku 6·flat/sonnet 5)이다. petclinic·community 캘리브레이션도 `data/`에 동봉돼 `--calibration`으로 선택한다. 자체 실측이 쌓이면:
 
 ```bash
 kn-calibrate --ledger results/run_ledger.jsonl --runs results/runs --out my-calibration.json
 kn-estimate <root> --calibration my-calibration.json
 ```
 
-`--calibration` 없이 실행하면(=동봉 SmartPlant 계수) CLI가 그 사실과 §4.4 파일럿
+`--calibration` 없이 실행하면(=동봉 auth-user 계수) CLI가 그 사실과 §4.4 파일럿
 절차를 자동 고지한다 — 캘리브레이션은 실측 원장이 필요해 도구가 대신 수행할 수 없다.
 
 원장에 등장하지만 산출에서 빠진 셀은 `skipped_cells`에 사유와 함께 기록되고 stderr로
@@ -177,9 +178,9 @@ kn-estimate /path/to/your-spring-project \
 | `--mode` | template | 생성 방식: `template`(spec→렌더러) / `flat`(직접 저작) |
 | `--model` | sonnet | opus / sonnet / haiku (미캘리브레이션 셀은 수치 미제공) |
 | `--calibration` | 내장 실측 | calibration.json 경로 (자체 실측으로 교체 가능) |
-| `--w-soft` | 180000 | 품질 정책 벽 (초과 시 패널티+경고, 유효 W_hard로 캡) |
+| `--w-soft` | 330000 | 품질 정책 벽 (초과 시 패널티+경고, 유효 W_hard로 캡) |
 | `--w-hard` | 900000 | 모델 상한 벽 (위반 불가, 모델별 윈도우×0.9로 자동 캡) |
-| `--conservative` | off | W_soft=150K 보수 프리셋 |
+| `--conservative` | off | W_soft=250K 보수 프리셋 |
 | `--parallel` | off | 청크 병렬 실행 가정 (벽시계=max, cache_write 할증) |
 | `--groups` | off | 비용 최적 생성 묶음을 "그룹N(EP, …) — $비용" 실행 지시로 출력 |
 | `--out-dir` | .kn | 출력 디렉토리 |
@@ -187,7 +188,7 @@ kn-estimate /path/to/your-spring-project \
 ### 4.3 결과 해석 가이드
 
 1. **매트릭스에서 구성을 고른다** — 예상 총비용·벽시계로. **모드 우열은 프로젝트와 N의
-   함수다**: SmartPlant형(대규모·중SQL 레거시)에서는 `template×sonnet`이 우세했으나,
+   함수다**: 대규모·중SQL 레거시형에서는 `template×sonnet`이 우세했으나,
    다중 프로젝트 실측(2026-07 캠페인)에서는 **소형 모던 서비스 3/3에서 flat×sonnet이
    더 쌌다** — template의 인프라 구축 고정비(out_env 3~4배)가 EP당 절감을 압도한다.
    자체 캘리브레이션이 있으면 도구로 모드 교차점 N을 직접 계산하라 (실측 예: auth-user
@@ -241,7 +242,7 @@ kn-estimate /path/to/your-spring-project \
 내장 캘리브레이션의 오차 −23~−34%가 자체 캘리브레이션+W_soft 재산정 후 **±10% 이내**로
 줄었다 (auth-user 예측 $6.66 vs 실측 $7.13, community $5.81 vs $6.17).
 
-4)를 생략하면 안 되는 이유: 현행 모델 세대의 환경 고정분(S0+δ_env)이 기본 W_soft(180K)를
+4)를 생략하면 안 되는 이유: 환경 고정분(S0+δ_env)이 낡은 W_soft 기본값을
 사실상 채워 **파티션이 EP당 1청크로 퇴화하고 비용이 3~6배 과대추정**된다 — 이때 CLI가
 경고를 낸다. 실측 상 EP당 한계 계수(δ_ep·out_ep)는 프로젝트 간 ±25% 내로 이전되지만
 환경 고정분(τ_env·out_env)은 3~4배까지 벌어지므로, 파일럿이 갱신하는 것은 주로 env다.

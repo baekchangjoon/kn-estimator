@@ -1,0 +1,60 @@
+{
+ "version": "kn-cal-1",
+ "source": "results/campaign/petclinic/run_ledger.jsonl",
+ "pricing": {
+  "opus": {
+   "input": 5.0,
+   "output": 25.0
+  },
+  "sonnet": {
+   "input": 3.0,
+   "output": 15.0
+  },
+  "haiku": {
+   "input": 1.0,
+   "output": 5.0
+  },
+  "cache_write_mult": 2.0,
+  "cache_read_mult": 0.1
+ },
+ "alpha_default": 0.5,
+ "cells": {
+  "template/sonnet": {
+   "S0": 66171,
+   "delta_env": 111544.0,
+   "delta_ep": 16013.5,
+   "tau_env": 43.714285714285715,
+   "tau_ep": 7.785714285714286,
+   "out_env": 36261.42857142857,
+   "out_ep": 8695.07142857143,
+   "latency_s_per_turn": 12.132075471698114,
+   "measured_costs": [
+    8.75,
+    9.14,
+    9.86
+   ],
+   "n_runs": 5,
+   "env_split_approx": false
+  },
+  "flat/sonnet": {
+   "S0": 64343.0,
+   "delta_env": 100635.0,
+   "delta_ep": 14973.0,
+   "tau_env": 59.57142857142857,
+   "tau_ep": 3.4285714285714284,
+   "out_env": 49650.0,
+   "out_ep": 7919.0,
+   "latency_s_per_turn": 12.61688640973631,
+   "measured_costs": [
+    7.74,
+    7.82,
+    8.02
+   ],
+   "n_runs": 6,
+   "env_split_approx": false
+  }
+ },
+ "skipped_cells": {
+  "template/haiku": "no_usable_runs(gate_fail=6)"
+ }
+}

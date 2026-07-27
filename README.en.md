@@ -44,14 +44,15 @@ kn-estimate <spring-project-root> --groups
 Example (actual output; the group lines are in Korean):
 
 ```text
-N=5 chunks=2 k_avg=2.5 est=$4.74
+N=18 chunks=3 k_avg=6.0 est=$21.18
 
-[tainted-spring-auth-user] cost-optimal generation batches (template×sonnet):
-  group1(POST /internal/auth/verify, GET /internal/users/{id}, GET /api/v1/me) — $2.6, peak 177,370
-  group2(POST /api/v1/auth/login, POST /api/v1/auth/guest) — $2.14, peak 157,952
-Run each of the 2 groups in a fresh independent session — continuing one session
-brings the quadratic cost back. Expected total $4.74, interval $3~$7.
-ℹ No project-specific calibration — estimated with the bundled (SmartPlant) coefficients …
+[spring-petclinic] cost-optimal generation batches (template×sonnet):
+  group1(POST /api/reservations, GET /api/reservations/{id}, …) — $6.93, peak 295,105
+  group2(GET /api/pets/types, GET /api/pets/{petId}, …) — $7.08, peak 301,767
+  group3(GET /api/owners, GET /api/owners/{ownerId}, …) — $7.17, peak 305,431
+Run each of the 3 groups in a fresh independent session — continuing one session
+brings the quadratic cost back. Expected total $21.18, interval $15~$28.
+ℹ No project-specific calibration — estimated with the bundled (tainted-spring-auth-user) coefficients …
 ```
 
 Run each group as one fresh session and the spend stays linear in the number of
@@ -101,17 +102,18 @@ kn-estimate <project_root> [options]
 | `--model opus\|sonnet\|haiku` | sonnet | Target model (uncalibrated cells are reported as `insufficient_calibration`) |
 | `--groups` | off | Print the cost-optimal batches as runnable "groupN(EP, …)" instructions |
 | `--calibration <path>` | bundled | Use a project-specific calibration file |
-| `--w-soft <n>` | 180000 | Quality-policy wall (penalty + warning above it; capped at the effective W_hard) |
+| `--w-soft <n>` | 330000 | Quality-policy wall (penalty + warning above it; capped at the effective W_hard) |
 | `--w-hard <n>` | 900000 | Model ceiling wall (auto-capped at 0.9× the model window — 180K for haiku) |
-| `--conservative` | off | W_soft=150K preset |
+| `--conservative` | off | W_soft=250K preset |
 | `--parallel` | off | Assume parallel chunk execution (wall-clock = max, 5% cache-write surcharge) |
 | `--out-dir <name>` | `.kn` | Output directory name |
 
 ## Calibration
 
-The bundled calibration (18 measured runs, 5 cells) works out of the box, but
-it was measured on a single project (SmartPlant), so **absolute USD is not
-guaranteed** — across 54 runs on three other projects, bundled coefficients
+The bundled calibration (17 measured runs on tainted-spring-auth-user, 3 cells —
+opus not measured) works out of the box, and petclinic/tainted-spring-community
+calibrations ship in `data/` for `--calibration`. It is still a single-project
+measurement, so **absolute USD is not guaranteed** — across 54 runs on three other projects, bundled coefficients
 were off by −23~−34%, and a pilot recalibration brought the error within ±10%.
 When run without `--calibration`, the CLI states this and prints the pilot
 procedure:
@@ -137,7 +139,7 @@ src/kn_estimator/
   plan.py                # controller-affine FFD partition, two-tier walls, K*, cost curve
   calibrate.py           # measured ledger → per-cell coefficients (kn-calibrate)
   cli.py                 # kn-estimate — report, plan, matrix, groups output
-  data/calibration.json  # bundled calibration (18 SmartPlant runs)
+  data/calibration*.json # bundled calibrations (campaign — default auth-user + petclinic/community)
 docs/                    # guide, derivations, design, measurement campaign, research notes
 results/                 # calibration ledger + transcripts (raw data for reproduction)
 research/                # verification scripts (w covariate, per-unit coefficient tests)
@@ -150,9 +152,9 @@ tests/                   # pytest — 42 tests without the SUT, +15 with it
 .venv/bin/python -m pytest tests/
 ```
 
-15 tests depend on the original SUT (SmartPlant) or an external sample and are
+Tests that depend on the SUT (a petclinic fork) or an external sample are
 skipped when absent (paths configurable via `KN_SUT`, `KN_EXTERNAL_SAMPLE`,
-`KN_LEDGER`/`KN_RUNS`). The remaining 42 are environment-independent and run in
+`KN_LEDGER`/`KN_RUNS`). The remaining 43 are environment-independent and run in
 CI (GitHub Actions) on every push and PR.
 
 ## Documentation (Korean)

@@ -97,9 +97,9 @@ float↔JSON 왕복은 `repr` 기반이라 값이 보존된다. 골든 파일 �
 `ROOT` 하드코딩을 제거하고 다음 순서로 해석한다:
 1. 환경변수 오버라이드 — SUT는 `KN_SUT`, 원장은 `KN_LEDGER`/`KN_RUNS`
 2. 저장소 상대 기본값 — 테스트 파일 자신 기준 `Path(__file__).resolve().parents[1]`의
-   `smartplant/`, `results/` (디렉토리 이동 시 깊이도 함께 갱신)
+   `legacy-sut/`, `results/` (디렉토리 이동 시 깊이도 함께 갱신)
 
-SUT(`smartplant/`)는 gitignore 대상이므로 **부재 시 skip**한다(조용한 pass 금지 — skip 사유를
+SUT(`legacy-sut/`)는 gitignore 대상이므로 **부재 시 skip**한다(조용한 pass 금지 — skip 사유를
 명시 출력). 원장 기반 테스트는 `results/`가 커밋돼 있으므로 항상 실행된다.
 
 ## 4. 데이터 흐름 (변경 없음)
@@ -123,7 +123,7 @@ data/calibration.json ──load──> cal ────────────
 |---|---|---|
 | E2E-1 | 인벤토리 = 167 EP | `scan.inventory(SUT)` 길이 |
 | E2E-2 | 캘리브레이션 5셀 (`flat/opus`, `flat/sonnet`, `template/opus`, `template/sonnet`, `template/haiku`), `flat/haiku` 부재 | 동봉 JSON `cells` 키 집합 |
-| E2E-3 | `kn-estimate smartplant --mode template --model sonnet` → `N=167 chunks=61 k_avg=2.7 est=$145.05` (B단계 K3(3) 반영 후) | 파싱된 수치 비교 |
+| E2E-3 | `kn-estimate legacy-sut --mode template --model sonnet` → `N=167 chunks=61 k_avg=2.7 est=$145.05` (B단계 K3(3) 반영 후) | 파싱된 수치 비교 |
 | E2E-4 | `kn-plan.json` sha256 = `fa5596936e81f776eeadde1e3cdd80832cc7433b88fdc76e6d24dc6c06843910` | 바이트 비교 |
 | E2E-5 | `kn-report.md` sha256 = `20fa2f9abcba956ee9e7e254cb437ec5512fd531048351947dbfaebc2833bd88` | 바이트 비교 |
 | E2E-6 | 기존 단위 테스트(hold-out, LOO 커버리지, 순서 보존, 파티션 불변식) 전량 green | pytest |
@@ -133,14 +133,14 @@ data/calibration.json ──load──> cal ────────────
 골든(`ddcc4264…`)은 비결정 표본이었으므로 폐기했다. 이것이 리팩토링의 행위 보존 증거다 —
 수치가 1비트라도 달라지면 실패다.
 
-> **골든 생성 시 주의:** `smartplant/`는 워크트리 간 심볼릭 링크로 공유되므로 기본
+> **골든 생성 시 주의:** `legacy-sut/`는 워크트리 간 심볼릭 링크로 공유되므로 기본
 > `--out-dir .kn`에 쓰면 다른 체크아웃의 실행이 덮어쓴다. 골든은 `--out-dir .kn-golden`처럼
 > 격리된 경로로 생성한다(실제로 이 오염을 한 번 겪었다).
 
 ## 6. 에러 처리
 
 - 동봉 `calibration.json` 부재/파손 → 명시적 예외(조용한 폴백 금지). 재생성 명령을 메시지에 포함.
-- `KN_SUT` 미설정 + `smartplant/` 부재 → 해당 테스트 skip + 사유 출력.
+- `KN_SUT` 미설정 + `legacy-sut/` 부재 → 해당 테스트 skip + 사유 출력.
 - 미캘리브레이션 셀 → 기존대로 `insufficient_calibration`(동작 보존).
 
 ## 7. 알려진 위험
