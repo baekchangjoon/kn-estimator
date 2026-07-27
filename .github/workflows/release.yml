@@ -17,6 +17,7 @@ on:
 
 permissions:
   contents: write   # 태그·릴리스 생성
+  packages: write   # 버전 도커 이미지 push (release 후속 job)
 
 concurrency:
   group: release-${{ github.ref }}
@@ -26,6 +27,9 @@ jobs:
   release:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+      tag: ${{ steps.ver.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -143,3 +147,27 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -am "kn-estimator ${VERSION}"
           git push
+
+  # GITHUB_TOKEN이 만든 태그는 docker.yml의 태그 push 트리거를 발화시키지 않는다
+  # (워크플로→워크플로 이벤트 억제). 버전 이미지는 릴리스 파이프라인이 직접 빌드한다.
+  docker-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: release
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ needs.release.outputs.tag }}
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/kn-estimator:${{ needs.release.outputs.version }}
