@@ -103,8 +103,10 @@ ls docs/*.md | kn-estimate --targets - --label translate --model haiku
  {"id": "PetController#create", "group": "PetController"}]
 ```
 
-- 필수 `id`(비어있지 않은 문자열, 중복 금지 — 리터럴 비교). 선택 `w`(양수 숫자;
-  생략 시 1.0), 선택 `group`(문자열; 생략 시 무그룹). 그 외 키는 무시(관용 수용).
+- 필수 `id`(비어있지 않은 문자열, 중복 금지 — 리터럴 비교). 선택 `w`(양수 숫자 —
+  bool은 Python에서 int의 서브클래스라 **명시적으로 거부**한다; 생략 시 1.0),
+  선택 `group`(문자열 — 비문자열은 인덱스 병기 SystemExit; 생략 시 무그룹).
+  그 외 키는 무시(관용 수용).
 - 스키마 위반(배열 아님·id 누락/비문자열·w 비양수/비숫자)은 항목 인덱스를 병기한
   한국어 SystemExit. **JSON 구문 오류**도 `load_calibration`의 JSONDecodeError
   처리와 같은 패턴의 한국어 SystemExit이다 (raw traceback 노출 금지).
@@ -185,7 +187,7 @@ cli.py의 스캐너 결합 리터럴 전수와 처리 (리뷰 C-I3 — 두 예�
 | 한계 고지 `w는 코드 크기(bytes/4)…복잡도 미반영` (293) | 유지 | w 출처별 문구: 파일 크기 자동이면 "w는 파일 크기(bytes/4)" / JSON 명시면 "w는 사용자 제공값" / 균일이면 "w 균일 가정" |
 | 파일럿 고지(ℹ)의 `EP 1개짜리` (333) | 유지 | `대상 1개짜리` — 단위 명사 헬퍼로 라우팅 |
 | `_env_wall_warning`의 `EP당 1청크로 퇴화` (108) | 유지 | `대상당 1청크로 퇴화` — 동일 헬퍼 |
-| `--groups` 헤더 `[{project_root.name}]` (305) | 유지 | `[<소스 라벨>]` (§3) — `Path(None)` TypeError 경로 제거 |
+| `--groups` 헤더 `[{project_root.name}]` (305) | 유지 | `[<소스 라벨 짧은 형태>]` — 목록 파일은 **stem**, stdin·`--n N`은 그대로 (§3; `대상:` 줄의 전체 경로와 다름에 유의) — `Path(None)` TypeError 경로 제거 |
 
 그 외 셀 기반 출력(파일럿 고지 본문·매트릭스·예측구간·비용 곡선)은 위 표의 단위
 명사 치환을 제외하면 전 소스 동일하다.
