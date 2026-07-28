@@ -61,8 +61,9 @@ run_id 기본 `<cwd basename>_<variant>-n<n>-r<rep>` (`--run-id`로 오버라이
 **D2 — 혼합 방지는 원장 메타로. 결측은 "claude-code"의 암묵 별칭이다.** 어댑터는
 원장 라인에 `"harness": "kiro-cli"`를 기입하고, CALIBRATION.md의 Claude Code
 스니펫도 `"harness": "claude-code"`를 기입하도록 갱신한다. kn-calibrate의 판정
-규칙: **셀 내 harness 값 집합(결측은 "claude-code"로 정규화)에 distinct 값이
-2종 이상이면 경고**(차단 아님). 결측=claude-code 별칭인 근거: 이 저장소의 기존
+규칙: **셀 내 harness 값 집합(결측은 "claude-code"로 정규화, 계수에 기여하는
+usable run 기준)에 distinct 값이 2종 이상이면 경고**(차단 아님)하고, 산출
+JSON에도 `harness_mixed` 키를 조건부 기록한다(진단용 — 혼합 없으면 키 미생성). 결측=claude-code 별칭인 근거: 이 저장소의 기존
 원장(campaign)은 전부 Claude Code 실측이다. 따라서 구 원장+Kiro run 혼합은
 경고되고, 구 원장+새 claude-code 명시 run 혼합은 경고되지 않는다.
 
@@ -103,7 +104,8 @@ exit한다. 기본 DB 경로는 §0의 macOS 경로이되 `--db <경로>`로 오
 **D8 — sessions-jsonl 폴백은 원장 전용이다.** sqlite에서 대화가 정리·삭제된 경우
 `--sessions-jsonl <경로>`는 AssistantMessage 이벤트로 out 근사와 wall_s(이벤트
 timestamp 차)만 계산해 **원장 라인만 만든다 — 트랜스크립트는 생성하지 않는다**
-(request_metadata가 없어 컨텍스트 복원 불가). 트랜스크립트 없는 run은
+(request_metadata가 없어 컨텍스트 복원 불가). 이 경로의 run_id 기본값은 cwd를
+알 수 없어 `kiro_<variant>-n<n>-r<rep>`다. 트랜스크립트 없는 run은
 kn-calibrate의 기존 `missing_transcript` 경로가 계수에서 제외하고 사유를
 병기하므로 새 메커니즘이 필요 없다. 즉 이 폴백의 용도는 "그 run의 비용·출력
 기록 보존"이지 계수 기여가 아니다.
@@ -116,18 +118,18 @@ kn-calibrate의 기존 `missing_transcript` 경로가 계수에서 제외하고 
 
 | REQ | 요구 (Given-When-Then) | 수용 테스트 (tests/test_kiro2kn.py) |
 |---|---|---|
-| REQ-001a | 합성 sqlite에서 `--list --cwd` 실행 시 cwd 필터·최신순·8자 id·턴수·첫 프롬프트가 출력된다 | `test_list_filters_by_cwd` |
-| REQ-001b | `--cwd` 없이 `--list` 실행 시 전체 대화가 나열된다 | `test_list_without_cwd_shows_all` |
-| REQ-002 | pct-폴백 대화 변환 시 턴별 컨텍스트가 pct×window와 일치하고 `_turn_stats`의 **τ == len(history)**, S0·cmax가 정확하다 (id 합성 검증 포함) | `test_convert_pct_fallback_roundtrip` |
-| REQ-003 | 토큰 필드가 채워진 대화는 pct가 아니라 실제 토큰 필드가 매핑되고 `out_approx: false`가 된다 | `test_convert_prefers_real_token_fields` |
-| REQ-004 | 변환 시 원장 라인에 harness=kiro-cli, `out_approx: true`(근사 시), **wall_s=(updated_at−created_at)/1000**가 기입된다 | `test_ledger_line_fields` |
-| REQ-005 | 같은 셀에서 (a) kiro-cli+claude-code 명시 혼합 → 경고, (b) kiro-cli+결측 혼합 → 경고, (c) claude-code 명시+결측 혼합 → 경고 없음 | `test_calibrate_mixed_harness_warnings` |
-| REQ-006 | 스키마 불일치(history/pct/window 키 부재) 시 결측 키를 지목하며 비-0 exit | `test_schema_mismatch_fails_loudly` |
-| REQ-007 | **E2E**: 합성 sqlite의 크기가 다른 run 2개(n1/n3) 변환 → kn-calibrate가 셀 계수 산출(out_approx 포함) → `kn-estimate --calibration` 완주 | `test_kiro_pilot_loop_end_to_end` |
-| REQ-008 | id 접두가 2개 이상과 충돌하면 후보를 나열하고 비-0 exit | `test_ambiguous_prefix_fails_with_candidates` |
-| REQ-009 | `--cost` 미지정 시 0 기입 + 경고 출력 | `test_cost_default_zero_warns` |
-| REQ-010 | `--run-id` 지정 시 기본 명명 대신 그 값이 쓰인다 | `test_run_id_override` |
-| REQ-011 | `--sessions-jsonl` 폴백은 원장 라인만 만들고 트랜스크립트를 만들지 않으며, 이후 kn-calibrate에서 해당 run이 missing_transcript로 제외된다 | `test_sessions_jsonl_fallback_ledger_only` |
+| REQ-001a | 합성 sqlite에서 `--list --cwd` 실행 시 cwd 필터·최신순·8자 id·턴수·첫 프롬프트가 출력된다 | `test_req001a_list_filters_by_cwd` |
+| REQ-001b | `--cwd` 없이 `--list` 실행 시 전체 대화가 나열된다 | `test_req001b_list_without_cwd_shows_all` |
+| REQ-002 | pct-폴백 대화 변환 시 턴별 컨텍스트가 pct×window와 일치하고 `_turn_stats`의 **τ == len(history)**, S0·cmax가 정확하다 (id 합성 검증 포함) | `test_req002_convert_pct_fallback_roundtrip` |
+| REQ-003 | 토큰 필드가 채워진 대화는 pct가 아니라 실제 토큰 필드가 매핑되고 `out_approx: false`가 된다 | `test_req003_convert_prefers_real_token_fields` |
+| REQ-004 | 변환 시 원장 라인에 harness=kiro-cli, `out_approx: true`(근사 시), **wall_s=(updated_at−created_at)/1000**가 기입된다 | `test_req004_ledger_line_fields` |
+| REQ-005 | 같은 셀에서 (a) kiro-cli+claude-code 명시 혼합 → 경고, (b) kiro-cli+결측 혼합 → 경고, (c) claude-code 명시+결측 혼합 → 경고 없음 | `test_req005_calibrate_mixed_harness_warnings` |
+| REQ-006 | 스키마 불일치(history/pct/window 키 부재) 시 결측 키를 지목하며 비-0 exit | `test_req006_schema_mismatch_fails_loudly` |
+| REQ-007 | **E2E**: 합성 sqlite의 크기가 다른 run 2개(n1/n3) 변환 → kn-calibrate가 셀 계수 산출(out_approx 포함) → `kn-estimate --calibration` 완주 | `test_req007_kiro_pilot_loop_end_to_end` |
+| REQ-008 | id 접두가 2개 이상과 충돌하면 후보를 나열하고 비-0 exit | `test_req008_ambiguous_prefix_fails_with_candidates` |
+| REQ-009 | `--cost` 미지정 시 0 기입 + 경고 출력 | `test_req009_cost_default_zero_warns` |
+| REQ-010 | `--run-id` 지정 시 기본 명명 대신 그 값이 쓰인다 | `test_req010_run_id_override` |
+| REQ-011 | `--sessions-jsonl` 폴백은 원장 라인만 만들고 트랜스크립트를 만들지 않으며, 이후 kn-calibrate에서 해당 run이 missing_transcript로 제외된다 | `test_req011_sessions_jsonl_fallback_ledger_only` |
 
 완료 정의 = REQ 12건 수용 테스트 green + 기존 스위트 무회귀(현 기준 67 passed /
 14 skipped, SUT 포함 80 passed / 1 skipped) + CALIBRATION.md §5 어댑터 연결 +
