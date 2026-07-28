@@ -132,18 +132,18 @@
 
 | REQ-ID | 요구사항 | 수용 테스트 (tests/test_targets_frontend.py, 별도 표기 제외) | Level | Status |
 |--------|----------|-------------|-------|--------|
-| REQ-001 | 텍스트 목록 수용 | test_req001_text_list | E2E | 🔴 planned |
-| REQ-002 | stdin 목록 | test_req002_stdin, test_req002_stdin_json_rejected | E2E | 🔴 planned |
-| REQ-003 | --n 개수만 | test_req003_n_only | E2E | 🔴 planned |
-| REQ-004 | 파일 w·group 자동 | test_req004_auto_w_group, test_req004_absolute_path_outside_cwd | E2E | 🔴 planned |
-| REQ-005 | 부분 폴백·경고 | test_req005_partial_fallback | E2E | 🔴 planned |
-| REQ-006 | JSON 정밀 목록 | test_req006_json_list, test_req006_json_missing_id, test_req006_json_bad_w, test_req006_json_not_array, test_req006_json_syntax_error, test_req006_json_duplicate_id | E2E | 🔴 planned |
-| REQ-007 | group 묶음·--groups | test_req007_groups_output, test_req007_mixed_group_section | E2E | 🔴 planned |
-| REQ-008 | 소스 상호 배타 | test_req008_both_sources, test_req008_no_source | E2E | 🔴 planned |
-| REQ-009 | 입력 검증 | test_req009_duplicate_path_normalized, test_req009_empty_list, test_req009_n_zero, test_req009_missing_file | E2E | 🔴 planned |
-| REQ-010 | 이상치 감지 | test_req010_outlier_warning_position, test_req010_no_warning_uniform | E2E | 🔴 planned |
-| REQ-011 | 스캐너 회귀 불변 | test_req011_scanner_baseline_unchanged (test_targets_frontend.py에 신설 — test_kn.py 자체 러너는 픽스처 함수에 TypeError라 배치 불가; KN_SUT 존중, SUT 부재 시 skip — CI 허용) | E2E | 🔴 planned |
-| REQ-012 | 리포트·고지 어휘 | test_req012_report_vocabulary, test_req012_n_source_line, test_req012_file_w_report, test_req012_json_w_report, test_req012_pilot_notice_noun, test_req012_env_wall_noun | E2E | 🔴 planned |
-| REQ-013 | 개념 문서·동기화 | test_req013_concepts_doc_linked | integration | 🔴 planned |
+| REQ-001 | 텍스트 목록 수용 | test_req001_text_list | E2E | 🟢 green |
+| REQ-002 | stdin 목록 | test_req002_stdin, test_req002_stdin_json_rejected | E2E | 🟢 green |
+| REQ-003 | --n 개수만 | test_req003_n_only | E2E | 🟢 green |
+| REQ-004 | 파일 w·group 자동 | test_req004_auto_w_group, test_req004_absolute_path_outside_cwd | E2E | 🟢 green |
+| REQ-005 | 부분 폴백·경고 | test_req005_partial_fallback | E2E | 🟢 green |
+| REQ-006 | JSON 정밀 목록 | test_req006_json_list, test_req006_json_missing_id, test_req006_json_bad_w, test_req006_json_not_array, test_req006_json_syntax_error, test_req006_json_duplicate_id | E2E | 🟢 green |
+| REQ-007 | group 묶음·--groups | test_req007_groups_output, test_req007_mixed_group_section | E2E | 🟢 green |
+| REQ-008 | 소스 상호 배타 | test_req008_both_sources, test_req008_no_source | E2E | 🟢 green |
+| REQ-009 | 입력 검증 | test_req009_duplicate_path_normalized, test_req009_empty_list, test_req009_n_zero, test_req009_missing_file | E2E | 🟢 green |
+| REQ-010 | 이상치 감지 | test_req010_outlier_warning_position, test_req010_no_warning_uniform | E2E | 🟢 green |
+| REQ-011 | 스캐너 회귀 불변 | test_req011_scanner_baseline_unchanged (test_targets_frontend.py에 신설 — test_kn.py 자체 러너는 픽스처 함수에 TypeError라 배치 불가; KN_SUT 존중, SUT 부재 시 skip — CI 허용) | E2E | 🟡 skip (테스트 신설·통과 조건 확정 — 로컬 SUT 클론 미보유로 실측 미실행, HANDOFF §2 후속 과제) |
+| REQ-012 | 리포트·고지 어휘 | test_req012_report_vocabulary, test_req012_n_source_line, test_req012_file_w_report, test_req012_json_w_report, test_req012_pilot_notice_noun, test_req012_env_wall_noun | E2E | 🟢 green |
+| REQ-013 | 개념 문서·동기화 | test_req013_concepts_doc_linked | integration | 🟢 green |
 
-Coverage: 0/13 green (0%) — target 100% (대상: Must 13건; Should/Could/Won't 없음. REQ-011은 SUT 보유 로컬 기준 green, CI는 skip 허용)
+Coverage: 12/13 green + REQ-011 🟡 skip — target 100% (대상: Must 13건. REQ-011은 SUT 보유 로컬 기준 green 판정인데 이번 작업 시점에 petclinic 비공개 포크 클론을 확보할 수 없어 skip 상태다. 수용 테스트는 작성돼 있고, SUT 확보 시 KN_SUT 지정 실행으로 판정한다 — HANDOFF §2 후속 과제)
