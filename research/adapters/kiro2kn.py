@@ -88,6 +88,11 @@ def resolve(con, prefix):
 def extract(value):
     """(턴별 usage 목록, output_tokens 합, out_approx) — D3 2단 폴백 + D4."""
     history = _require(value, "history", "value")
+    if not history:
+        # 0턴 transcript는 kn-calibrate에서 usable로 집계돼 tau_env·out_env를
+        # 0으로 붕괴시킨다 — 중단 세션은 시끄럽게 거부한다.
+        raise SystemExit("history가 비어 있다 — 중단된 세션이거나 잘못된 "
+                         "conversation_id다. --list로 턴 수를 확인하라.")
     window = _require(_require(value, "model_info", "value"),
                       "context_window_tokens", "model_info")
     usages, out_total, approx_out = [], 0, 0
@@ -125,7 +130,9 @@ def write_transcript(runs_dir, run_id, cid, usages):
 
 
 def append_ledger(ledger, row):
-    with open(ledger, "a") as f:
+    p = Path(ledger)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with open(p, "a", encoding="utf-8") as f:
         f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
@@ -215,6 +222,7 @@ def main(argv=None):
     usages, out_tokens, out_approx = extract(value)
     wall_s = round((updated - created) / 1000)   # D7 — 세션 벽시계
     run_id = args.run_id or f"{Path(cwd).name}_{args.variant}-n{args.n}-r{args.rep}"
+    Path(args.ledger).parent.mkdir(parents=True, exist_ok=True)   # 반쪽 산출물 방지
     tr = write_transcript(args.runs_dir, run_id, cid, usages)
     row = {"run_id": run_id, "variant": args.variant, "role": "run_total",
            "n": args.n, "rep": args.rep, "gate": args.gate,

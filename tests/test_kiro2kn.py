@@ -17,7 +17,7 @@ REPO = Path(__file__).resolve().parents[1]
 _spec = importlib.util.spec_from_file_location(
     "kiro2kn", REPO / "research/adapters/kiro2kn.py")
 kiro2kn = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_spec and kiro2kn)
+_spec.loader.exec_module(kiro2kn)
 
 from kn_estimator import calibrate  # noqa: E402
 
@@ -192,7 +192,7 @@ def test_req005_calibrate_mixed_harness_warnings(tmp_path, harnesses, expect_war
     ledger, runs = _harness_ledger(tmp_path, harnesses)
     calibrate.main(["--ledger", str(ledger), "--runs", str(runs)])
     err = capsys.readouterr().err
-    assert ("harness" in err) is expect_warn, err
+    assert ("서로 다른 harness" in err) is expect_warn, err
 
 
 # ---- REQ-006: 스키마 불일치 시끄러운 실패 --------------------------------------
@@ -326,3 +326,59 @@ def test_req011_sessions_jsonl_fallback_ledger_only(tmp_path):
     # kn-calibrate: 트랜스크립트 부재 → 기존 missing_transcript 경로로 제외
     cal = calibrate.calibrate(tmp_path / "ledger.jsonl", tmp_path / "runs")
     assert "missing_transcript" in str(cal["skipped_cells"])
+
+
+# ---- 품질 리뷰 지적 고정 -------------------------------------------------------
+
+def test_empty_history_conversation_is_rejected(tmp_path):
+    """중단된 세션(history=[])을 변환하면 0턴 transcript가 usable run으로 집계돼
+    tau_env·out_env를 0으로 붕괴시킨다 (리뷰 수치 재현) — 시끄럽게 거부해야 한다."""
+    cid = "dead0000-0000-0000-0000-00000000000d"
+    db = _make_db(tmp_path, [_conversation(cid, "/w", [])])
+    with pytest.raises(SystemExit) as e:
+        _run_cli("--db", str(db), "dead0000", "--variant", "flat_template_sonnet",
+                 "--n", "1", "--rep", "1", "--gate", "pass", "--cost", "1",
+                 "--runs-dir", str(tmp_path / "runs"),
+                 "--ledger", str(tmp_path / "ledger.jsonl"))
+    assert "history" in str(e.value)
+    assert not (tmp_path / "runs").exists()      # 반쪽 산출물 금지
+    assert not (tmp_path / "ledger.jsonl").exists()
+
+
+def test_ledger_parent_dir_is_created(tmp_path):
+    """첫 사용자가 아직 없는 디렉토리를 --ledger로 지정해도 traceback 없이
+    동작해야 한다 (부모 디렉토리 생성)."""
+    cid = "feed0000-0000-0000-0000-00000000000e"
+    db = _make_db(tmp_path, [_conversation(cid, "/w", _pct_turns(2))])
+    ledger = tmp_path / "calib/nested/ledger.jsonl"
+    _run_cli("--db", str(db), "feed0000", "--variant", "flat_template_sonnet",
+             "--n", "1", "--rep", "1", "--gate", "pass", "--cost", "1",
+             "--runs-dir", str(tmp_path / "runs"), "--ledger", str(ledger))
+    assert ledger.exists()
+
+
+def test_mixed_real_and_pct_turns(tmp_path):
+    """혼합 대화(실토큰 턴 + pct 턴): 컨텍스트는 턴별로 각자 소스를 쓰고,
+    out은 통째로 바이트 근사(out_approx=True) — Kiro가 토큰 필드를 채우기
+    시작하는 전환기에 실데이터로 나타나는 상태다."""
+    cid = "aaaa9999-0000-0000-0000-00000000000f"
+    turns = [_turn(pct=50.0, tokens={"total_tokens": 1000,
+                                     "cache_read_input_tokens": 900,
+                                     "uncached_input_tokens": 100,
+                                     "cache_write_input_tokens": 0,
+                                     "output_tokens": 200}, assistant_bytes=400),
+             _turn(pct=2.0, assistant_bytes=400)]
+    db = _make_db(tmp_path, [_conversation(cid, "/w", turns)])
+    _run_cli("--db", str(db), "aaaa9999", "--variant", "flat_template_sonnet",
+             "--n", "1", "--rep", "1", "--gate", "pass", "--cost", "1",
+             "--runs-dir", str(tmp_path / "runs"),
+             "--ledger", str(tmp_path / "ledger.jsonl"))
+    tr = next((tmp_path / "runs").iterdir()) / "transcript.jsonl"
+    lines = [json.loads(l)["message"]["usage"] for l in tr.read_text().splitlines()]
+    ctx = [sum(u.values()) for u in lines]
+    assert ctx[0] == 1000                          # 실측 턴은 실토큰
+    assert ctx[1] == round(2.0 / 100 * WINDOW)     # pct 턴은 pct×window
+    row = json.loads((tmp_path / "ledger.jsonl").read_text().splitlines()[0])
+    assert row["out_approx"] is True
+    # out은 전 턴 바이트 근사 합 (실측 200 합산이 아님)
+    assert row["output_tokens"] > 150 and row["output_tokens"] != 200
