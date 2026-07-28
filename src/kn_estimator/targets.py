@@ -102,22 +102,27 @@ def parse_targets(arg, stdin=None):
         raise SystemExit(f"--targets 목록에 유효 항목이 없다: {source_label}")
     _check_duplicates(ids)
     paths = [Path(i) for i in ids]
+    uniform_note = None
     if all(p.is_file() for p in paths):
         items = [{"id": i, "w": float(_file_tokens(p)), "group": str(p.parent)}
                  for i, p in zip(ids, paths)]
         w_source = "file"
     else:
         if any(p.is_file() for p in paths):
+            # 부분 폴백 — 혼합 측정(실존=크기, 그 외=1)은 상대 비교를 왜곡한다.
             bad = [(i, p) for i, p in zip(ids, paths) if not p.is_file()]
             n_dir = sum(1 for _, p in bad if p.is_dir())
             n_miss = len(bad) - n_dir
             print(f"경고: {len(ids)}건 중 {len(bad)}건이 일반 파일이 아니라"
                   f"(미실존 {n_miss}건, 디렉터리 {n_dir}건) w를 균일 가정합니다. "
                   f"예: {', '.join(i for i, _ in bad[:5])}", file=sys.stderr)
+        else:
+            # 이름 문자열 목록 — 정상 사용, 경고 없음
+            uniform_note = "목록에 파일 경로 없음"
         items = [{"id": i, "w": 1.0, "group": None} for i in ids]
         w_source = "uniform"
     return {"slices": _synth(items), "n": len(items), "w_source": w_source,
-            "source_label": source_label}
+            "source_label": source_label, "uniform_note": uniform_note}
 
 
 def n_targets(n):

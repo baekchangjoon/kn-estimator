@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
-"""kn-estimator CLI: 대상 프로젝트 정적 스캔 → N·w 분포·청크 플랜·비용 예측.
+"""kn-estimator CLI: 대상 목록 → N·w 분포·청크 플랜·비용 예측.
 
 사용:
-  kn-estimate <project_root> [--label <작업라벨>] [--model sonnet|opus|haiku]
-              [--calibration cal.json] [--w-soft 180000] [--w-hard 900000]
-              [--conservative] [--parallel] [--out-dir .kn]
+  kn-estimate <project_root>       [옵션]   # Spring 스캐너 앞단 (엔드포인트 자동 열거)
+  kn-estimate --targets <파일|->   [옵션]   # 범용 앞단 — 대상 목록 직접 공급
+  kn-estimate --n <개수>           [옵션]   # 범용 앞단 — 개수만 (균일 w)
+  옵션: [--label <작업라벨>] [--model sonnet|opus|haiku] [--calibration cal.json]
+        [--w-soft 180000] [--w-hard 900000] [--conservative] [--parallel]
+        [--groups] [--out-dir .kn]
 
 출력: <out-dir>/kn-report.md (사람용), <out-dir>/kn-plan.json (기계용).
 LLM 호출 없음 — 파일 스캔만으로 수 초 내 동작.
 """
-import argparse, json, sys
+import argparse, json, statistics, sys
 from pathlib import Path
 
-from . import model, plan as plan_mod, scan
+from . import model, plan as plan_mod, scan, targets as targets_mod
 
 HERE = Path(__file__).resolve().parent
 BUNDLED_CALIBRATION = HERE / "data/calibration.json"
@@ -58,6 +61,13 @@ def load_calibration(path=None):
     return cal
 
 
+def _display(s):
+    """슬라이스 표시 문자열 — 스캐너는 "METHOD /path", 범용 앞단은 id 그대로.
+    리포트·--groups·plan.json이 공유한다 (method가 비면 선행 공백 금지)."""
+    e = s["endpoint"]
+    return f"{e['method']} {e['path']}" if e["method"] else e["path"]
+
+
 def _plan_interval(cal, label, mdl, slices, p, w_soft, parallel=False):
     """플랜 총액의 예측구간 (low, high).
 
@@ -90,7 +100,7 @@ def _plan_interval(cal, label, mdl, slices, p, w_soft, parallel=False):
     return min(lo_a, base) * b_lo, max(hi_a, base) * b_hi
 
 
-def _env_wall_warning(cal, label, mdl, w_soft):
+def _env_wall_warning(cal, label, mdl, w_soft, noun_short="EP"):
     """환경 고정분이 W_soft를 사실상 채우면 경고 문자열, 아니면 None.
 
     S0+delta_env가 벽의 90%를 넘으면 EP를 담을 여유가 없어 파티션이 EP당 1청크로
@@ -105,8 +115,9 @@ def _env_wall_warning(cal, label, mdl, w_soft):
     env = c.get("S0", 0) + c.get("delta_env", 0)
     if env >= 0.9 * w_soft:
         return (f"경고: 환경 고정분 S0+delta_env={env:,.0f}이 W_soft={w_soft:,}의 90%를 "
-                f"넘습니다. 파티션이 EP당 1청크로 퇴화해 비용이 과대추정될 수 있습니다 — "
-                f"게이트 통과 세션의 실측 컨텍스트 분포로 --w-soft 재산정을 권장합니다.")
+                f"넘습니다. 파티션이 {noun_short}당 1청크로 퇴화해 비용이 과대추정될 수 "
+                f"있습니다 — 게이트 통과 세션의 실측 컨텍스트 분포로 --w-soft 재산정을 "
+                f"권장합니다.")
     return None
 
 
@@ -136,8 +147,15 @@ def build_matrix(sls, cal, w_hard, w_soft, parallel=False):   # 인자 순서 = 
 
 def main():
     ap = argparse.ArgumentParser(
-        description="Spring 프로젝트 정적 스캔 → 테스트 생성 비용/청크 플랜 예측 (LLM 호출 없음)")
-    ap.add_argument("project_root", help="스캔할 Spring 프로젝트 루트 디렉토리")
+        description="대상 목록(스캐너 자동 또는 --targets/--n) → 테스트·분석 등 "
+                    "반복 작업의 비용/청크 플랜 예측 (LLM 호출 없음)")
+    ap.add_argument("project_root", nargs="?",
+                    help="스캔할 Spring 프로젝트 루트 디렉토리 (생략 시 --targets/--n 필요)")
+    ap.add_argument("--targets",
+                    help="대상 목록 파일 또는 '-'(stdin, 텍스트 전용). 한 줄에 대상 "
+                         "하나; .json 확장자면 [{id, w?, group?}] 정밀형")
+    ap.add_argument("--n", type=int,
+                    help="목록 없이 개수만 — 균일 w의 합성 대상 N개")
     ap.add_argument("--label", default="template",
                     help="작업 라벨 — 캘리브레이션 셀 이름의 앞 절반 (자유 문자열; "
                          "동봉 캘리브레이션의 라벨: template|flat)")
@@ -154,16 +172,19 @@ def main():
     ap.add_argument("--parallel", action="store_true",
                     help="청크 병렬 실행 가정 (벽시계=max, cache_write 5% 할증)")
     ap.add_argument("--groups", action="store_true",
-                    help="비용 최적 생성 묶음을 '그룹N(EP, …)' 형태로 출력")
+                    help="비용 최적 생성 묶음을 '그룹N(대상, …)' 형태로 출력")
     ap.add_argument("--out-dir", default=".kn",
-                    help="산출물 디렉토리 (기본 .kn — 프로젝트 루트 기준 상대 또는 절대 경로)")
+                    help="산출물 디렉토리 (기본 .kn — 프로젝트 루트/cwd 기준 상대 또는 절대 경로)")
     args = ap.parse_args()
+    sources = [x for x in (args.project_root, args.targets, args.n) if x is not None]
+    if len(sources) != 1:
+        raise SystemExit("입력 소스는 정확히 하나여야 한다 — <project_root> | "
+                         "--targets <파일|-> | --n <개수> 중 하나를 지정하라.")
+    if args.n is not None and args.n <= 0:
+        raise SystemExit(f"--n 은 양수여야 한다 (받은 값: {args.n})")
     if args.w_soft <= 0 or args.w_hard <= 0:
         raise SystemExit("--w-soft/--w-hard 는 양수여야 한다 "
                          f"(받은 값: w_soft={args.w_soft}, w_hard={args.w_hard})")
-    root = Path(args.project_root)
-    if not root.is_dir():
-        raise SystemExit(f"프로젝트 경로가 없거나 디렉토리가 아니다: {root}")
     if "/" in args.label:
         raise SystemExit(f"라벨에 '/'를 쓸 수 없다 ('{args.label}') — "
                          "셀 키가 <label>/<model> 형식이라 구분자와 충돌한다.")
@@ -171,21 +192,36 @@ def main():
 
     cal = load_calibration(args.calibration)
 
-    eps = scan.inventory(args.project_root)
-    if not eps:
-        print("No JSON endpoints found."); sys.exit(1)
-    sls = scan.build_slices(args.project_root, eps)
+    generic = args.project_root is None
+    noun = "대상" if generic else "엔드포인트"
+    noun_short = "대상" if generic else "EP"
+    if generic:
+        meta = (targets_mod.parse_targets(args.targets) if args.targets
+                else targets_mod.n_targets(args.n))
+        sls, n = meta["slices"], meta["n"]
+        w_source, src_label = meta["w_source"], meta["source_label"]
+        unresolved = 0
+    else:
+        root = Path(args.project_root)
+        if not root.is_dir():
+            raise SystemExit(f"프로젝트 경로가 없거나 디렉토리가 아니다: {root}")
+        eps = scan.inventory(args.project_root)
+        if not eps:
+            print("No JSON endpoints found."); sys.exit(1)
+        sls = scan.build_slices(args.project_root, eps)
+        n = len(sls)
+        w_source, src_label = "file", args.project_root
+        unresolved = sum(1 for s in sls if s["unresolved"])
     ws = sorted(s["w_tokens"] for s in sls)
-    n = len(sls)
     tertiles = ws[n // 3], ws[2 * n // 3]
-    unresolved = sum(1 for s in sls if s["unresolved"])
+    uniform_w = generic and w_source == "uniform"
 
     # 선택 셀의 유효 벽 = build_plan이 실제로 쓰는 값 (모델 윈도우 캡 반영).
     # 경고·K*·보고서가 이 값을 공유해야 한다 — 요청값을 그대로 쓰면 haiku에
     # soft 벽이 hard 벽보다 큰 자기모순 보고서가 나온다.
     eff_soft = min(w_soft, args.w_hard, plan_mod.model_w_hard(args.model))
 
-    warn = _env_wall_warning(cal, args.label, args.model, eff_soft)
+    warn = _env_wall_warning(cal, args.label, args.model, eff_soft, noun_short)
     if warn:
         print(warn)
 
@@ -205,14 +241,31 @@ def main():
     k_star = plan_mod.k_stars(cal, args.label, args.model, p["w_soft"])
     curve = plan_mod.cost_coefficients(cal, args.label, args.model)
 
-    # 컨트롤러 단위 요약: n(EP 수)·Σw·배정 청크. 단위별 a,b,c는 만들지 않는다 —
-    # 컨트롤러 소속의 분산 설명력 검정(research/unit_variance.py)에서 유의한 근거가
-    # 없었다 (전 케이스 순열 p≥0.079, 절반은 구조적으로 검정 불가).
+    # 공통 이상치 감지 (모든 앞단): 강제 단독 배치 없이 경고·권고만 — 고정비 중복
+    # 역효과가 있고 δ̂-FFD가 초과 항목을 자연 격리한다. '파일럿' 단어 금지
+    # (test_pilot_notice의 "--calibration 명시 시 '파일럿' 없음" 불변식과 충돌).
+    outlier_msg = None
+    outs = targets_mod.outliers(sls)
+    if outs:
+        med = statistics.median(s["w_tokens"] for s in sls)
+        listing = ", ".join(
+            f"{_display(s)} (w={s['w_tokens']:,.0f}, {s['w_tokens'] / med:.0f}배)"
+            for s in outs[:5])
+        outlier_msg = (f"⚠ 이상치 {len(outs)}건: {listing} — 이 {noun}들은 나머지와 "
+                       "크기가 이질적입니다. 현재 셀 계수로의 외삽은 과소추정 위험이 "
+                       "있어 별도 라벨로 분리 측정을 권장합니다.")
+
+    # 단위(그룹) 집계: 스캐너 = 컨트롤러, 범용 = 명시 group만 (합성 무그룹 키는
+    # 사용자 어휘가 아니다 — 어떤 산출물에도 노출 금지). 단위별 a,b,c는 만들지
+    # 않는다 — 컨트롤러 소속의 분산 설명력 검정(research/unit_variance.py)에서
+    # 유의한 근거가 없었다 (전 케이스 순열 p≥0.079, 절반은 구조적으로 검정 불가).
     controllers = {}
     for i, c in enumerate(p["chunks"]):
         for s in c["endpoints"]:
-            info = controllers.setdefault(s["endpoint"]["controller"],
-                                          {"n": 0, "w_tokens": 0, "chunks": []})
+            name = s["endpoint"]["controller"]
+            if generic and not targets_mod.is_explicit_group(name):
+                continue
+            info = controllers.setdefault(name, {"n": 0, "w_tokens": 0, "chunks": []})
             info["n"] += 1
             info["w_tokens"] += s["w_tokens"]
             if i not in info["chunks"]:
@@ -220,26 +273,45 @@ def main():
 
     matrix = build_matrix(sls, cal, args.w_hard, w_soft, args.parallel)
 
-    out = Path(args.project_root) / args.out_dir
+    out = (Path.cwd() if generic else Path(args.project_root)) / args.out_dir
     out.mkdir(parents=True, exist_ok=True)
     plan_json = {**{k: v for k, v in p.items() if k != "chunks"},
-                 "chunks": [{**c, "endpoints": [f"{s['endpoint']['method']} {s['endpoint']['path']}"
-                                                 for s in c["endpoints"]]} for c in p["chunks"]],
+                 "chunks": [{**c, "endpoints": [_display(s) for s in c["endpoints"]]}
+                            for c in p["chunks"]],
                  "k_star": k_star,
                  "cost_curve": curve,
                  "controllers": controllers,
                  "calibration_version": cal["version"]}
     (out / "kn-plan.json").write_text(json.dumps(plan_json, indent=2, ensure_ascii=False))
 
-    top = sorted(sls, key=lambda s: -s["w_tokens"])[:10]
-    lines = [
-        "# kn-estimator 보고서", "",
-        "> **절대 USD는 비보증** — 캘리브레이션은 단일 프로젝트(tainted-spring-auth-user) 실측 기반이며,",
-        "> 이 보고서의 주 용도는 라벨·모델·청크 구성의 **상대 비교**다. 토큰 추정은 bytes/4",
-        "> 근사(fallback)를 사용한다.", "",
-        f"- 대상: `{args.project_root}`",
-        f"- **N = {n}** 엔드포인트 (미해결 슬라이스 {unresolved}건 = {unresolved/n:.0%} — 중앙값 prior 적용)",
-        f"- w 분포: p33={tertiles[0]:,} / p66={tertiles[1]:,} / max={ws[-1]:,} tokens (상대 비교용)", "",
+    if generic:
+        src_disp = (f"({src_label}, {n}건)" if src_label == "stdin"
+                    else f"({src_label})" if src_label.startswith("--n ")
+                    else f"`{src_label}`")
+        lines = [
+            "# kn-estimator 보고서", "",
+            "> **절대 USD는 비보증** — 캘리브레이션은 단일 프로젝트(tainted-spring-auth-user) 실측 기반이며,",
+            "> 이 보고서의 주 용도는 라벨·모델·청크 구성의 **상대 비교**다.", "",
+            f"- 대상: {src_disp}",
+            f"- **N = {n}** {noun}"]
+        if uniform_w:
+            note = meta.get("uniform_note")
+            lines.append(f"- w: 균일 가정{f' ({note})' if note else ''}")
+        else:
+            lines.append(f"- w 분포: p33={tertiles[0]:,.0f} / p66={tertiles[1]:,.0f} "
+                         f"/ max={ws[-1]:,.0f} tokens (상대 비교용)")
+    else:
+        lines = [
+            "# kn-estimator 보고서", "",
+            "> **절대 USD는 비보증** — 캘리브레이션은 단일 프로젝트(tainted-spring-auth-user) 실측 기반이며,",
+            "> 이 보고서의 주 용도는 라벨·모델·청크 구성의 **상대 비교**다. 토큰 추정은 bytes/4",
+            "> 근사(fallback)를 사용한다.", "",
+            f"- 대상: `{args.project_root}`",
+            f"- **N = {n}** 엔드포인트 (미해결 슬라이스 {unresolved}건 = {unresolved/n:.0%} — 중앙값 prior 적용)",
+            f"- w 분포: p33={tertiles[0]:,} / p66={tertiles[1]:,} / max={ws[-1]:,} tokens (상대 비교용)"]
+    if outlier_msg:
+        lines.append(f"> {outlier_msg}")
+    lines += ["",
         f"## 권장 플랜 ({args.label}×{args.model})", "",
         f"- 청크 수: **{p['n_chunks']}** (평균 K={p['k_avg']})",
         f"- 예상 총비용: **${p['total_cost_usd']}** / 예상 벽시계: {p['total_wall_s']/3600:.1f}h"
@@ -249,11 +321,14 @@ def main():
          if interval else "- 예측구간: 산출 불가 (캘리브레이션 부족)"),
         f"- 벽: W_soft={p['w_soft']:,} (품질 정책), W_hard={p['w_hard']:,} (모델 상한 반영)",
         (f"- K*_cost={k_star['k_cost']} (셀 단가 최소 K), K*_wall={k_star['k_wall']}"
+         " (W_soft 용량 상한, 평균 w 기준) — 실제 파티션은 그룹 경계·δ̂ 기반이라"
+         " 평균 K와 다를 수 있다" if k_star and generic else
+         f"- K*_cost={k_star['k_cost']} (셀 단가 최소 K), K*_wall={k_star['k_wall']}"
          " (W_soft 용량 상한, 평균 w 기준) — 실제 파티션은 컨트롤러 경계·δ̂ 기반이라"
          " 평균 K와 다를 수 있다" if k_star else "- K*: 산출 불가 (캘리브레이션 부족)"),
         (f"- 비용 곡선(셀 합성, 단일 청크·평균 w 기준, USD): "
          f"C(K) ≈ {curve['a']:.2f} + {curve['b']:.3f}·K + {curve['c']:.4f}·K²"
-         f" — a: 청크 고정비, b: EP 한계비용, c: 컨텍스트 누적 항"
+         f" — a: 청크 고정비, b: {noun_short} 한계비용, c: 컨텍스트 누적 항"
          f" (무제약 K*=√(a/c)≈{(curve['a'] / curve['c']) ** 0.5:.1f}"
          " — 위 K*_cost는 K*_wall 절단 반영)"
          if curve and curve["c"] > 0 else "- 비용 곡선: 산출 불가 (캘리브레이션 부족)"),
@@ -271,42 +346,75 @@ def main():
                   "> ⚠ haiku 최저가에는 **검증 통과율 리스크**가 따른다 — 캠페인 실측에서"
                   " 소형 프로젝트 게이트 전멸 사례(petclinic template/haiku 0/6)가 있었다."
                   " 금액만으로 선택하지 말 것 (docs/GUIDE.md §4.3)."]
-    lines += ["", "## 컨트롤러 단위", "",
-              "> n·Σw·배정 청크는 컨트롤러별로 산출하지만, 비용 계수(a,b,c)는 셀 전역"
-              " 하나다 — 컨트롤러 소속의 분산 설명력 검정(research/unit_variance.py)에서"
-              " 실질 검정 가능한 케이스(petclinic 2건)가 유의하지 않았고(p=0.079, 0.341),"
-              " 나머지는 표본 구조상 검정 불가·검정력 없음이었다.", "",
-              "| 컨트롤러 | n (EP) | Σw (tokens) | 배정 청크 |", "|---|---|---|---|"]
-    for name in sorted(controllers, key=lambda c: -controllers[c]["n"]):
-        info = controllers[name]
-        lines.append(f"| {name} | {info['n']} | {info['w_tokens']:,} "
-                     f"| {', '.join(f'#{i}' for i in info['chunks'])} |")
-    lines += ["", "## 슬라이스 크기 상위 10 엔드포인트", "",
-              "> w는 **코드 크기**(bytes/4)다 — 분기 수 등 복잡도는 반영하지 않는다.", "",
-              "| Endpoint | w (tokens) | external | unresolved |", "|---|---|---|---|"]
-    for s in top:
-        e = s["endpoint"]
-        lines.append(f"| {e['method']} {e['path']} | {s['w_tokens']:,} "
-                     f"| {'Y' if s['external_call'] else ''} | {', '.join(s['unresolved'])} |")
-    lines += ["", "## 한계 고지", "",
-              "- 캘리브레이션 셀별 실측 run 분산(±30~46%)이 예측 하한 오차 — 구간으로 해석할 것.",
-              "- **작업량 w는 코드 크기만 반영하고 복잡도(분기 수·순환복잡도)는 미반영.** 같은"
-              " 크기라도 분기가 많은 핸들러는 테스트가 더 필요하나 동일하게 취급된다.",
-              "- w는 상대 공변량으로만 쓰인다 — 절대 비용 수준은 전적으로 캘리브레이션 계수에서"
-              " 온다 (w를 일괄 배수해도 결과는 불변).",
-              "- 정적 슬라이스는 리플렉션·동적 라우팅·설정 기반 빈을 과소평가할 수 있음.",
-              f"- 캘리브레이션 버전: {cal['version']} (N=8 관측 기반 — 대규모 N 외삽 미검증).",
-              "- 미캘리브레이션 셀은 insufficient_calibration으로 표기 (추정치 미제공)."]
+    if generic:
+        if controllers:
+            lines += ["", "## 그룹 단위", "",
+                      "| 그룹 | n | Σw (tokens) | 배정 청크 |", "|---|---|---|---|"]
+            for name in sorted(controllers, key=lambda c: -controllers[c]["n"]):
+                info = controllers[name]
+                lines.append(f"| {name} | {info['n']} | {info['w_tokens']:,.0f} "
+                             f"| {', '.join(f'#{i}' for i in info['chunks'])} |")
+        if not uniform_w:
+            top = sorted(sls, key=lambda s: -s["w_tokens"])[:10]
+            w_note = ("> w는 파일 크기(bytes/4)다 — 분기 수 등 복잡도는 반영하지 않는다."
+                      if w_source == "file" else
+                      "> w는 사용자 제공값이다 — 상대 비교로만 쓰인다.")
+            lines += ["", f"## w 상위 10 {noun}", "", w_note, "",
+                      "| 대상 | w (tokens) |", "|---|---|"]
+            for s in top:
+                lines.append(f"| {_display(s)} | {s['w_tokens']:,.0f} |")
+        w_limit = {"file": "- w는 파일 크기(bytes/4)만 반영하고 복잡도(분기 수 등)는 미반영.",
+                   "json": "- w는 사용자 제공값이다 — 검증 없이 상대 비교에만 쓰인다.",
+                   "uniform": "- w는 균일 가정이다 — 상대 배분에 영향 없음."}[w_source]
+        lines += ["", "## 한계 고지", "",
+                  "- 캘리브레이션 셀별 실측 run 분산(±30~46%)이 예측 하한 오차 — 구간으로 해석할 것.",
+                  w_limit,
+                  "- w는 상대 공변량으로만 쓰인다 — 절대 비용 수준은 전적으로 캘리브레이션 계수에서"
+                  " 온다 (w를 일괄 배수해도 결과는 불변).",
+                  f"- 캘리브레이션 버전: {cal['version']} (N=8 관측 기반 — 대규모 N 외삽 미검증).",
+                  "- 캘리브레이션의 n과 이 목록의 N은 **같은 단위**로 세어져야 한다"
+                  " (단위 일관성 계약 — docs/CONCEPTS.md).",
+                  "- 미캘리브레이션 셀은 insufficient_calibration으로 표기 (추정치 미제공)."]
+    else:
+        lines += ["", "## 컨트롤러 단위", "",
+                  "> n·Σw·배정 청크는 컨트롤러별로 산출하지만, 비용 계수(a,b,c)는 셀 전역"
+                  " 하나다 — 컨트롤러 소속의 분산 설명력 검정(research/unit_variance.py)에서"
+                  " 실질 검정 가능한 케이스(petclinic 2건)가 유의하지 않았고(p=0.079, 0.341),"
+                  " 나머지는 표본 구조상 검정 불가·검정력 없음이었다.", "",
+                  "| 컨트롤러 | n (EP) | Σw (tokens) | 배정 청크 |", "|---|---|---|---|"]
+        for name in sorted(controllers, key=lambda c: -controllers[c]["n"]):
+            info = controllers[name]
+            lines.append(f"| {name} | {info['n']} | {info['w_tokens']:,} "
+                         f"| {', '.join(f'#{i}' for i in info['chunks'])} |")
+        top = sorted(sls, key=lambda s: -s["w_tokens"])[:10]
+        lines += ["", "## 슬라이스 크기 상위 10 엔드포인트", "",
+                  "> w는 **코드 크기**(bytes/4)다 — 분기 수 등 복잡도는 반영하지 않는다.", "",
+                  "| Endpoint | w (tokens) | external | unresolved |", "|---|---|---|---|"]
+        for s in top:
+            e = s["endpoint"]
+            lines.append(f"| {e['method']} {e['path']} | {s['w_tokens']:,} "
+                         f"| {'Y' if s['external_call'] else ''} | {', '.join(s['unresolved'])} |")
+        lines += ["", "## 한계 고지", "",
+                  "- 캘리브레이션 셀별 실측 run 분산(±30~46%)이 예측 하한 오차 — 구간으로 해석할 것.",
+                  "- **작업량 w는 코드 크기만 반영하고 복잡도(분기 수·순환복잡도)는 미반영.** 같은"
+                  " 크기라도 분기가 많은 핸들러는 테스트가 더 필요하나 동일하게 취급된다.",
+                  "- w는 상대 공변량으로만 쓰인다 — 절대 비용 수준은 전적으로 캘리브레이션 계수에서"
+                  " 온다 (w를 일괄 배수해도 결과는 불변).",
+                  "- 정적 슬라이스는 리플렉션·동적 라우팅·설정 기반 빈을 과소평가할 수 있음.",
+                  f"- 캘리브레이션 버전: {cal['version']} (N=8 관측 기반 — 대규모 N 외삽 미검증).",
+                  "- 미캘리브레이션 셀은 insufficient_calibration으로 표기 (추정치 미제공)."]
     (out / "kn-report.md").write_text("\n".join(lines) + "\n")
     print(f"N={n} chunks={p['n_chunks']} k_avg={p['k_avg']} est=${p['total_cost_usd']}")
+    if outlier_msg:
+        # stdout 위치 계약: N=… 요약 직후, --groups 블록·파일럿 고지(ℹ)보다 앞.
+        print(outlier_msg)
     if args.groups:
         # "그룹1(q, w, e), 그룹2(z, x, y)로 돌리세요" — 요청 한 줄에 실행 계획으로
         # 답하기 위한 출력. 각 그룹 = 독립 세션 1개 (이 조건이 1차 비용의 전제다).
-        print(f"\n[{Path(args.project_root).resolve().name}] "
-              f"비용 최적 생성 묶음 ({args.label}×{args.model}):")
+        hdr = src_label if generic else Path(args.project_root).resolve().name
+        print(f"\n[{hdr}] 비용 최적 생성 묶음 ({args.label}×{args.model}):")
         for i, c in enumerate(p["chunks"], 1):
-            ep_labels = ", ".join(f"{s['endpoint']['method']} {s['endpoint']['path']}"
-                                  for s in c["endpoints"])
+            ep_labels = ", ".join(_display(s) for s in c["endpoints"])
             # 그룹 비용은 soft 페널티 반영값 — 총액과의 합산 정합을 위해서다
             # (병렬 할증 5%는 플랜 수준 근사라 총액에만 명시).
             shown = round(c["est_cost_usd"] * (1.15 if c["soft_exceeded"] else 1.0), 2)
@@ -330,7 +438,7 @@ def main():
         print("ℹ 이 프로젝트의 자체 캘리브레이션이 없습니다 — 동봉(tainted-spring-auth-user) 계수로 "
               "추정했습니다 (상대 비교용, 절대 금액 비보증).\n"
               "  금액 정확도가 필요하면 파일럿 캘리브레이션부터: 같은 라벨×모델로 "
-              "크기가 다른 그룹 2개 이상 실측(예: EP 1개짜리 + 최소 그룹) → "
+              f"크기가 다른 그룹 2개 이상 실측(예: {noun_short} 1개짜리 + 최소 그룹) → "
               "kn-calibrate --ledger <원장> --runs <런들> --out my-cal.json → "
               "게이트 통과 세션의 컨텍스트 분포로 --w-soft 재산정 → "
               "--calibration my-cal.json 으로 재실행. 캠페인 설계(N 2점×반복 3) "
