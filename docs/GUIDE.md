@@ -151,14 +151,14 @@ kn-estimate <root> --calibration my-calibration.json
 경고된다 — `no_usable_runs(gate_fail=…, missing_transcript=…)`(게이트 전멸·트랜스크립트
 전멸), `insufficient_runs(...)`(표본<2, 트랜스크립트 부재분 병기), 또는
 `single_n_without_reference_cell(flat/opus)`(단일 N 셀인데 env:ep 분해 기준이 될
-flat/opus 2점 fit이 원장에 없음). 원장에 variant 자체가 없는 셀은 기록하지 않는다.
+원장에 등장하지 않는 셀은 기록하지 않는다.
 `kn-estimate`의 매트릭스도 이 사유를 `insufficient_calibration (…)`으로 병기한다.
 
 ### ④ 플랜·보고서
 
 - `kn-plan.json`: 청크별 엔드포인트 목록·예상 비용·피크 컨텍스트 — 러너가 그대로
   순회하며 청크당 1세션을 실행하면 된다 (청크드 flat 실행 계획).
-- `kn-report.md`: N, w 분포(p33/p66/max), 권장 플랜, **모드×모델 전체 매트릭스**,
+- `kn-report.md`: N, w 분포(p33/p66/max), 권장 플랜, **셀(라벨×모델) 매트릭스**,
   복잡도 상위 10 엔드포인트, 한계 고지.
 
 ## 4. 사용 방법
@@ -167,7 +167,7 @@ flat/opus 2점 fit이 원장에 없음). 원장에 variant 자체가 없는 셀�
 
 ```bash
 kn-estimate /path/to/your-spring-project \
-    --mode template --model sonnet
+    --label template --model sonnet
 # → your-spring-project/.kn/kn-report.md, kn-plan.json
 ```
 
@@ -175,7 +175,7 @@ kn-estimate /path/to/your-spring-project \
 
 | 옵션 | 기본 | 설명 |
 |---|---|---|
-| `--mode` | template | 생성 방식: `template`(spec→렌더러) / `flat`(직접 저작) |
+| `--label` | template | 작업 라벨(자유 문자열) — 셀 이름의 앞 절반. 동봉 캘리브레이션의 라벨: `template`(spec→렌더러 생성 전략) / `flat`(직접 저작 전략) |
 | `--model` | sonnet | opus / sonnet / haiku (미캘리브레이션 셀은 수치 미제공) |
 | `--calibration` | 내장 실측 | calibration.json 경로 (자체 실측으로 교체 가능) |
 | `--w-soft` | 330000 | 품질 정책 벽 (초과 시 패널티+경고, 유효 W_hard로 캡) |
@@ -187,11 +187,11 @@ kn-estimate /path/to/your-spring-project \
 
 ### 4.3 결과 해석 가이드
 
-1. **매트릭스에서 구성을 고른다** — 예상 총비용·벽시계로. **모드 우열은 프로젝트와 N의
+1. **매트릭스에서 구성을 고른다** — 예상 총비용·벽시계로. **라벨(전략) 우열은 프로젝트와 N의
    함수다**: 대규모·중SQL 레거시형에서는 `template×sonnet`이 우세했으나,
    다중 프로젝트 실측(2026-07 캠페인)에서는 **소형 모던 서비스 3/3에서 flat×sonnet이
    더 쌌다** — template의 인프라 구축 고정비(out_env 3~4배)가 EP당 절감을 압도한다.
-   자체 캘리브레이션이 있으면 도구로 모드 교차점 N을 직접 계산하라 (실측 예: auth-user
+   자체 캘리브레이션이 있으면 도구로 전략 교차점 N을 직접 계산하라 (실측 예: auth-user
    N≈9부터 template 우세 — 단 그 서비스는 N=5라 flat이 정답). 비용 절대 최소는
    여전히 `template×haiku`(단, 검증 깊이 캐비앗 + 소형 프로젝트에서 셀 전멸 리스크 —
    캠페인에서 petclinic 0/6). 근거: `docs/2026-07-20-multi-project-calibration-campaign.md` §3.
@@ -216,7 +216,7 @@ kn-estimate /path/to/your-spring-project \
 
 ```
 1) kn-estimate로 초기 플랜 산출 (내장 캘리브레이션, 절대값은 참고치)
-2) 같은 모드×모델로 **크기가 다른** 그룹 2개 이상 실행 (파일럿 — 예: EP 1개짜리
+2) 같은 라벨×모델로 **크기가 다른** 그룹 2개 이상 실행 (파일럿 — 예: EP 1개짜리
    + 가장 작은 그룹). kn-calibrate의 env/ep 분해가 N 2점을 요구하고 셀당 run<2는
    산출에서 제외되므로, 그룹 1개나 같은 크기 2개로는 계수가 나오지 않는다.
    반복 2~3회면 분산 밴드까지 실측 기반이 된다 (±10% 수치는 N 2점×반복 3 설계).
@@ -229,13 +229,13 @@ kn-estimate /path/to/your-spring-project \
 한 줄의 JSON이다 (필수 필드):
 
 ```json
-{"run_id": "myproj_flat_template_sonnet-n3-r1", "variant": "flat_template_sonnet",
+{"run_id": "myproj_template-sonnet-n3-r1", "label": "template", "model": "sonnet",
  "role": "run_total", "n": 3, "rep": 1, "gate": "pass",
  "cost_usd": 5.1, "output_tokens": 41000, "wall_s": 900}
 ```
 
-- `variant` → 셀 매핑: `flat`=flat/opus, `flat_sonnet`, `flat_haiku`,
-  `flat_template`=template/opus, `flat_template_sonnet`, `flat_template_haiku`.
+- 셀은 `label/model`로 정의된다 — label은 작업 유형의 자유 이름표(동봉 실측:
+  `template`·`flat`).
 - `--runs` 디렉토리에는 `<run_id>/transcript.jsonl`(Claude Code 세션 트랜스크립트)을
   두면 assistant 메시지 usage에서 S0·턴 수·최대 컨텍스트를 복원한다.
 - `gate`가 `pass`인 run만 계수에 반영된다 (실패 run은 조기 종료로 비용이 과소).
@@ -255,7 +255,7 @@ kn-estimate /path/to/your-spring-project \
 
 ### 4.5 한계 (요약)
 
-- **절대 USD 비보증** — 주 용도는 모드·모델·K의 상대 비교와 실행 플랜.
+- **절대 USD 비보증** — 주 용도는 라벨·모델·K의 상대 비교와 실행 플랜.
   (2026-07 캠페인 실측: 내장 캘리브레이션의 타 프로젝트 오차 −23~−34%,
   파일럿 재캘리브레이션 후 ±10% — §4.4.)
 - 정적 슬라이스는 리플렉션·동적 라우팅·설정 기반 빈을 과소평가할 수 있다.

@@ -14,7 +14,7 @@
          run_ledger.jsonl               ← run당 1줄 "합계" (사람이/스크립트로 기록)
          runs/<run_id>/transcript.jsonl  ← 세션 로그 (에이전트가 자동 기록한 파일을 복사)
 ② kn-calibrate --ledger run_ledger.jsonl --runs runs/ --out my-cal.json
-     └→ 셀(모드×모델)별 계수로 분해 (env/ep 2점 fit)
+     └→ 셀(라벨×모델)별 계수로 분해 (env/ep 2점 fit)
 ③ 게이트 통과 세션의 컨텍스트 분포로 --w-soft 재산정
 ④ kn-estimate <root> --calibration my-cal.json --w-soft <재산정값>
 ```
@@ -37,7 +37,7 @@
 ## 3. 파일럿 실측 절차
 
 1. **플랜 산출**: `kn-estimate <root> --groups` — 그룹 구성을 얻는다.
-2. **run 2개 선택 — 크기가 달라야 한다**: 같은 모드×모델로 **EP 1개짜리** run과
+2. **run 2개 선택 — 크기가 달라야 한다**: 같은 라벨×모델로 **EP 1개짜리** run과
    **최소 그룹** run. kn-calibrate의 env/ep 분해가 N 2점의 1차 fit이라, 같은 크기
    2개나 1개짜리 하나로는 계수가 나오지 않는다 (반복 2~3회면 분산 밴드까지
    실측 기반이 된다 — ±10% 수치는 N 2점×반복 3 설계의 실측이다).
@@ -51,12 +51,12 @@
    컴파일되는 것까지다. 완료하면 다른 작업 없이 종료하라.
    ```
 
-4. **세션 종료 후 기록** (run_id 명명 규약: `<프로젝트>_<variant>-n<EP수>-r<반복>`)
+4. **세션 종료 후 기록** (run_id 명명 규약: `<프로젝트>_<label>-<model>-n<EP수>-r<반복>`)
 
    ```bash
-   mkdir -p runs/myproj_flat_template_sonnet-n1-r1
+   mkdir -p runs/myproj_template-sonnet-n1-r1
    cp ~/.claude/projects/<슬러그>/<세션id>.jsonl \
-      runs/myproj_flat_template_sonnet-n1-r1/transcript.jsonl
+      runs/myproj_template-sonnet-n1-r1/transcript.jsonl
    ```
 
    원장 한 줄은 §4 스니펫으로 계산해 `run_ledger.jsonl`에 append.
@@ -73,13 +73,14 @@
 run당 1줄 JSON (필수 필드):
 
 ```json
-{"run_id": "myproj_flat_template_sonnet-n1-r1", "variant": "flat_template_sonnet",
+{"run_id": "myproj_template-sonnet-n1-r1", "label": "template", "model": "sonnet",
  "role": "run_total", "n": 1, "rep": 1, "gate": "pass",
  "cost_usd": 5.16, "output_tokens": 69007, "wall_s": 818, "harness": "claude-code"}
 ```
 
-`variant` → 셀 매핑: `flat`=flat/opus, `flat_sonnet`, `flat_haiku`,
-`flat_template`=template/opus, `flat_template_sonnet`, `flat_template_haiku`.
+셀은 `label/model`로 정의된다 — `label`은 작업 유형의 자유 이름표다 (동봉 실측의
+라벨: `template`·`flat` 두 생성 전략). 임의 작업(예: 클래스 분석)이라면 자기 라벨
+하나로 충분하다.
 
 트랜스크립트에서 합계를 계산하는 스니펫 (Claude Code 트랜스크립트 기준; 캠페인
 실측 원장과 오차 ~1% 이내 — 서브에이전트 사용량은 별도 트랜스크립트라 미포함):
@@ -130,28 +131,22 @@ print(f'"cost_usd": {cost:.2f}, "output_tokens": {out}, "turns": {len(seen)}, '
   필드의 합으로 S0(첫 턴)·cmax(최대)·τ(줄 수)만 계산한다. 자기 에이전트의 세션
   로그를 이 형태로 바꾸는 변환 스크립트 하나가 곧 어댑터다.
 
-### 실증된 어댑터 예시 — Kiro CLI (`kiro2kn`)
+### 실증된 어댑터 예시 — Kiro CLI (`kn-kiro`)
 
-Kiro CLI용 어댑터가 동봉돼 있다: `research/adapters/kiro2kn.py`
+Kiro CLI용 어댑터가 패키지에 동봉돼 있다 — 설치 시 `kn-kiro` 명령
 (계획·스키마 근거: `docs/superpowers/plans/2026-07-28-kiro2kn-adapter-plan.md`).
 Kiro의 sqlite(`~/Library/Application Support/kiro-cli/data.sqlite3`,
 conversations_v2)에서 턴별 컨텍스트를 복원해 계약 형식으로 변환한다:
 
 ```bash
 # 가장 흔한 경로 — 파일럿 세션 종료 직후, 그 프로젝트 디렉토리에서 한 줄.
-# --latest가 현재 디렉토리의 가장 최근 Kiro 대화를 자동 선택하고, --mode/--model은
+# --latest가 현재 디렉토리의 가장 최근 Kiro 대화를 자동 선택하고, --label/--model은
 # kn-estimate와 같은 어휘다 (runs/·run_ledger.jsonl은 기본값이라 생략 가능).
-# 스크립트는 kn-estimator 체크아웃의 절대경로로 지정한다:
-python <kn-estimator>/research/adapters/kiro2kn.py --latest \
-    --mode template --model sonnet --n 1 --gate pass --cost 0.42
-# kn-estimator 저장소 안에서 실행한다면 --cwd로 파일럿 디렉토리를 지정:
-python research/adapters/kiro2kn.py --latest --cwd ~/work/my-backend \
-    --mode template --model sonnet --n 1 --gate pass --cost 0.42
+kn-kiro --latest --label template --model sonnet --n 1 --gate pass --cost 0.42
 
 # 세션을 명시 선택해야 할 때:
-python research/adapters/kiro2kn.py --list --cwd ~/work/my-backend
-python research/adapters/kiro2kn.py c7719363 --mode template --model sonnet \
-    --n 1 --gate pass --cost 0.42
+kn-kiro --list --cwd ~/work/my-backend
+kn-kiro c7719363 --label template --model sonnet --n 1 --gate pass --cost 0.42
 ```
 
 한계: 현 Kiro 버전은 턴별 토큰 필드를 채우지 않아 컨텍스트는
@@ -162,7 +157,7 @@ python research/adapters/kiro2kn.py c7719363 --mode template --model sonnet \
 - **주의 — 계수는 하네스의 함수다.** S0는 지침·시스템 프롬프트 크기, τ·out_env는
   에이전트의 행동 패턴에서 온다 (실측: Kiro S0≈13.8K vs Claude Code 66K).
   에이전트를 바꾸면 **반드시 그 에이전트로 재캘리브레이션**해야 하고, 셀의 실질
-  의미는 "모드×모델×하네스"다. 동봉 캘리브레이션은 Claude Code 하네스 실측이므로
+  의미는 "라벨×모델×하네스"다. 동봉 캘리브레이션은 Claude Code 하네스 실측이므로
   타 에이전트에서는 상대 비교 참고치로만 쓰라.
 
 ## 6. 엔드포인트 너머 — 범용화 (로드맵, 미구현)
@@ -189,5 +184,5 @@ python research/adapters/kiro2kn.py c7719363 --mode template --model sonnet \
 - **run이 하나뿐이면?** 셀이 산출되지 않고 `kn-calibrate`가 비-0 exit로 실패한다
   (크기가 다른 2점 필요). 오류 메시지가 사유를 알려준다.
 - **왜 게이트 실패 run을 버리나?** 조기 종료된 run은 비용이 실제보다 작아 계수를
-  낙관적으로 오염시킨다. 실패율 자체는 모드·모델 선택의 별도 판단 재료다
+  낙관적으로 오염시킨다. 실패율 자체는 라벨·모델 선택의 별도 판단 재료다
   (보고서의 haiku 각주가 그 예).

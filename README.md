@@ -85,7 +85,7 @@ N=18 chunks=3 k_avg=6.0 est=$21.18
 
 | 산출물 | 내용 |
 |---|---|
-| `<root>/.kn/kn-report.md` | 사람용 보고서 — N·w 분포, 권장 플랜, 예측구간, 비용 곡선(a,b,c), K\*, 모드×모델 매트릭스, 컨트롤러 단위 표, 한계 고지 |
+| `<root>/.kn/kn-report.md` | 사람용 보고서 — N·w 분포, 권장 플랜, 예측구간, 비용 곡선(a,b,c), K\*, 셀(라벨×모델) 매트릭스, 컨트롤러 단위 표, 한계 고지 |
 | `<root>/.kn/kn-plan.json` | 기계용 플랜 — 청크별 엔드포인트·예상 비용·피크 컨텍스트, `cost_curve`, `controllers` |
 
 ## 아이디어
@@ -100,7 +100,7 @@ kn-estimator는 착수 전에:
 
 1. 대상 프로젝트를 **정적 스캔**해 N(JSON 엔드포인트 수)과 엔드포인트별 작업량
    w_i(핸들러 span + 의존성 슬라이스 + MyBatis XML/JPA 엔티티)를 계산하고,
-2. 실측 캘리브레이션 계수(S0/τ/δ/out, 모드×모델 셀별)로 청크를 **턴 단위
+2. 실측 캘리브레이션 계수(S0/τ/δ/out, 셀=라벨×모델별)로 청크를 **턴 단위
    시뮬레이션**해,
 3. 비용 최적과 컨텍스트 벽 중 먼저 걸리는 제약으로 **컨트롤러 친화 bin-packing
    청크 플랜**을 산출합니다.
@@ -121,7 +121,7 @@ kn-estimate <project_root> [옵션]
 
 | 옵션 | 기본 | 뜻 |
 |---|---|---|
-| `--mode flat\|template` | template | 생성 모드 |
+| `--label <이름>` | template | 작업 라벨 — 셀 이름의 앞 절반 (자유 문자열; 동봉 캘리브레이션의 라벨: `template`\|`flat`) |
 | `--model opus\|sonnet\|haiku` | sonnet | 대상 모델 (미캘리브레이션 셀은 `insufficient_calibration` 표기) |
 | `--groups` | off | 비용 최적 생성 묶음을 "그룹N(EP, …)" 실행 지시 형태로 출력 |
 | `--calibration <path\|이름>` | 동봉본(auth-user) | 캘리브레이션 파일 경로 또는 동봉 번들 이름(`petclinic`\|`community`\|`auth-user`) |
@@ -142,7 +142,7 @@ kn-estimate <project_root> [옵션]
 파일럿 절차를 고지합니다:
 
 ```bash
-# 1) 같은 모드×모델로 크기가 다른 그룹 2개 이상 실측 (예: EP 1개짜리 + 최소 그룹)
+# 1) 같은 라벨×모델로 크기가 다른 그룹 2개 이상 실측 (예: EP 1개짜리 + 최소 그룹)
 # 2) 실측 원장으로 자체 계수 재계산
 kn-calibrate --ledger run_ledger.jsonl --runs runs/ --out my-cal.json
 # 3) 게이트 통과 세션의 컨텍스트 분포로 --w-soft 재산정 후 재실행
@@ -167,7 +167,7 @@ src/kn_estimator/
 docs/                    # 가이드·수식 유도·설계·실측 캠페인·연구 노트
 results/                 # 캘리브레이션 원장·트랜스크립트 (재현용 원자료)
 research/                # 검정 스크립트 (w 공변량, 단위별 계수 분화)
-tests/                   # pytest — SUT 없이 67건, SUT 있으면 +13건
+tests/                   # pytest — SUT 없이 93건, SUT 있으면 +13건
 ```
 
 ## 테스트
@@ -178,7 +178,7 @@ tests/                   # pytest — SUT 없이 67건, SUT 있으면 +13건
 
 SUT(petclinic 포크)·외부 샘플 의존 테스트는 해당 경로가 없으면 건너뜁니다
 (`KN_SUT`, `KN_EXTERNAL_SAMPLE`, `KN_LEDGER`/`KN_RUNS` 환경변수로 지정 가능).
-나머지 67건은 환경 무관이며 CI(GitHub Actions)가 push·PR마다 실행합니다.
+나머지 93건은 환경 무관이며 CI(GitHub Actions)가 push·PR마다 실행합니다.
 
 ## 문서
 
@@ -193,7 +193,7 @@ SUT(petclinic 포크)·외부 샘플 의존 테스트는 해당 경로가 없으
 
 ## 한계
 
-- **절대 USD는 비보증** — 주 용도는 모드·모델·청크 구성의 상대 비교와 청크 플랜.
+- **절대 USD는 비보증** — 주 용도는 라벨·모델·청크 구성의 상대 비교와 청크 플랜.
 - 예측 구간은 α 민감도(좁은 구간) × run 간 분산(실측 ±30~46%)의 결합 — 점추정이
   아니라 구간으로 읽어야 합니다.
 - 캘리브레이션 run이 2개 미만인 셀은 추정치를 내지 않고

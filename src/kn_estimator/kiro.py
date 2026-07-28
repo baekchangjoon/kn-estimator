@@ -31,12 +31,6 @@ from pathlib import Path
 
 DEFAULT_DB = Path.home() / "Library/Application Support/kiro-cli/data.sqlite3"
 HARNESS = "kiro-cli"
-# kn-estimate와 같은 어휘(--mode/--model)를 원장 variant로 조립한다
-VARIANT_OF = {("flat", "opus"): "flat", ("flat", "sonnet"): "flat_sonnet",
-              ("flat", "haiku"): "flat_haiku",
-              ("template", "opus"): "flat_template",
-              ("template", "sonnet"): "flat_template_sonnet",
-              ("template", "haiku"): "flat_template_haiku"}
 
 
 def _connect(db):
@@ -200,11 +194,10 @@ def main(argv=None):
                     help=f"Kiro sqlite 경로 (기본 {DEFAULT_DB})")
     ap.add_argument("--sessions-jsonl",
                     help="원장 전용 폴백 — sqlite에서 정리된 대화의 이벤트 로그")
-    ap.add_argument("--mode", choices=["template", "flat"],
-                    help="생성 모드 — kn-estimate와 같은 어휘 (--model과 함께 지정)")
+    ap.add_argument("--label",
+                    help="작업 라벨 — kn-estimate와 같은 어휘 (--model과 함께 지정)")
     ap.add_argument("--model", choices=["sonnet", "opus", "haiku"],
-                    help="대상 모델 (--mode와 함께 지정)")
-    ap.add_argument("--variant", help="원장 variant 직접 지정 (--mode/--model 대신)")
+                    help="대상 모델 (--label과 함께 지정)")
     ap.add_argument("--n", type=int, help="이 run이 처리한 엔드포인트 수")
     ap.add_argument("--rep", type=int, default=1, help="반복 번호")
     ap.add_argument("--gate", choices=["pass", "fail"],
@@ -227,14 +220,8 @@ def main(argv=None):
                          "다른 세션이 조용히 선택되는 것을 막기 위해서다.")
     if args.latest and args.sessions_jsonl:
         raise SystemExit("--latest와 --sessions-jsonl은 동시에 쓸 수 없다.")
-    if args.variant and (args.mode or args.model):
-        raise SystemExit("--variant와 --mode/--model은 동시에 쓸 수 없다 — 하나만 지정하라.")
-    if args.mode or args.model:
-        if not (args.mode and args.model):
-            raise SystemExit("--mode와 --model은 함께 지정해야 한다.")
-        args.variant = VARIANT_OF[(args.mode, args.model)]
-    if not (args.variant and args.n and args.gate):
-        raise SystemExit("--mode/--model(또는 --variant), --n, --gate 는 변환에 필수다.")
+    if not (args.label and args.model and args.n and args.gate):
+        raise SystemExit("--label/--model, --n, --gate 는 변환에 필수다.")
     cost = args.cost
     if cost is None:
         print("경고: --cost 미지정 — cost_usd=0으로 기록한다 (상대 비교 전용). "
@@ -244,8 +231,9 @@ def main(argv=None):
 
     if args.sessions_jsonl:
         out_tokens, wall_s = from_sessions_jsonl(args.sessions_jsonl)
-        run_id = args.run_id or f"kiro_{args.variant}-n{args.n}-r{args.rep}"
-        row = {"run_id": run_id, "variant": args.variant, "role": "run_total",
+        run_id = args.run_id or f"kiro_{args.label}-{args.model}-n{args.n}-r{args.rep}"
+        row = {"run_id": run_id, "label": args.label, "model": args.model,
+               "role": "run_total",
                "n": args.n, "rep": args.rep, "gate": args.gate,
                "cost_usd": cost, "output_tokens": out_tokens, "wall_s": wall_s,
                "harness": HARNESS, "out_approx": True}
@@ -267,10 +255,11 @@ def main(argv=None):
     value = json.loads(raw)
     usages, out_tokens, out_approx = extract(value)
     wall_s = round((updated - created) / 1000)   # D7 — 세션 벽시계
-    run_id = args.run_id or f"{Path(cwd).name}_{args.variant}-n{args.n}-r{args.rep}"
+    run_id = args.run_id or f"{Path(cwd).name}_{args.label}-{args.model}-n{args.n}-r{args.rep}"
     Path(args.ledger).parent.mkdir(parents=True, exist_ok=True)   # 반쪽 산출물 방지
     tr = write_transcript(args.runs_dir, run_id, cid, usages)
-    row = {"run_id": run_id, "variant": args.variant, "role": "run_total",
+    row = {"run_id": run_id, "label": args.label, "model": args.model,
+           "role": "run_total",
            "n": args.n, "rep": args.rep, "gate": args.gate,
            "cost_usd": cost, "output_tokens": out_tokens, "wall_s": wall_s,
            "harness": HARNESS, "out_approx": out_approx}

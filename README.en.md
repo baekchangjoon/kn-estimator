@@ -85,7 +85,7 @@ endpoints N. Artifacts written alongside:
 
 | Artifact | Contents |
 |---|---|
-| `<root>/.kn/kn-report.md` | Human report — N and w distribution, recommended plan, prediction interval, cost curve (a,b,c), K\*, mode×model matrix, per-controller table, stated limits |
+| `<root>/.kn/kn-report.md` | Human report — N and w distribution, recommended plan, prediction interval, cost curve (a,b,c), K\*, cell (label×model) matrix, per-controller table, stated limits |
 | `<root>/.kn/kn-plan.json` | Machine plan — per-chunk endpoints, estimated cost, peak context, `cost_curve`, `controllers` |
 
 ## Idea
@@ -102,7 +102,7 @@ Before generation starts, kn-estimator:
 1. **Statically scans** the project for N (JSON endpoints) and per-endpoint
    workload w_i (handler span + dependency slice + MyBatis XML / JPA entities),
 2. **Simulates chunks turn by turn** with measured calibration coefficients
-   (S0/τ/δ/out per mode×model cell),
+   (S0/τ/δ/out per cell = label×model),
 3. Produces a **controller-affine bin-packing chunk plan** bounded by whichever
    binds first: the cost optimum or the context wall.
 
@@ -123,7 +123,7 @@ kn-estimate <project_root> [options]
 
 | Option | Default | Meaning |
 |---|---|---|
-| `--mode flat\|template` | template | Generation mode |
+| `--label <name>` | template | Task label — the first half of the cell name (free string; bundled labels: `template`\|`flat`) |
 | `--model opus\|sonnet\|haiku` | sonnet | Target model (uncalibrated cells are reported as `insufficient_calibration`) |
 | `--groups` | off | Print the cost-optimal batches as runnable "groupN(EP, …)" instructions |
 | `--calibration <path\|name>` | bundled (auth-user) | Calibration file path or a bundled name (`petclinic`\|`community`\|`auth-user`) |
@@ -144,7 +144,7 @@ When run without `--calibration`, the CLI states this and prints the pilot
 procedure:
 
 ```bash
-# 1) Measure >=2 groups of DIFFERENT sizes in the same mode×model cell
+# 1) Measure >=2 groups of DIFFERENT sizes in the same label×model cell
 #    (e.g. a 1-endpoint group + the smallest planned group)
 # 2) Recompute project-specific coefficients from the measured ledger
 kn-calibrate --ledger run_ledger.jsonl --runs runs/ --out my-cal.json
@@ -170,7 +170,7 @@ src/kn_estimator/
 docs/                    # guide, derivations, design, measurement campaign, research notes
 results/                 # calibration ledger + transcripts (raw data for reproduction)
 research/                # verification scripts (w covariate, per-unit coefficient tests)
-tests/                   # pytest — 67 tests without the SUT, +13 with it
+tests/                   # pytest — 93 tests without the SUT, +13 with it
 ```
 
 ## Tests
@@ -181,7 +181,7 @@ tests/                   # pytest — 67 tests without the SUT, +13 with it
 
 Tests that depend on the SUT (a petclinic fork) or an external sample are
 skipped when absent (paths configurable via `KN_SUT`, `KN_EXTERNAL_SAMPLE`,
-`KN_LEDGER`/`KN_RUNS`). The remaining 67 are environment-independent and run in
+`KN_LEDGER`/`KN_RUNS`). The remaining 93 are environment-independent and run in
 CI (GitHub Actions) on every push and PR.
 
 ## Documentation (Korean)
@@ -198,7 +198,7 @@ CI (GitHub Actions) on every push and PR.
 ## Limits
 
 - **Absolute USD is not guaranteed** — the primary use is relative comparison
-  across modes/models/chunkings, and the chunk plan itself.
+  across labels/models/chunkings, and the chunk plan itself.
 - Prediction intervals combine α sensitivity (narrow band) with between-run
   variance (measured ±30~46%) — read the interval, not the point estimate.
 - Cells with fewer than 2 calibration runs report

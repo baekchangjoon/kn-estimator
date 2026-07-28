@@ -1,20 +1,15 @@
 """캘리브레이션: run_ledger.jsonl + 트랜스크립트 → calibration.json.
 
-셀(모드×모델)별 관측 가능량만 추출 (설계 v2.1):
+셀(라벨×모델)별 관측 가능량만 추출:
   S0(첫 턴 컨텍스트), tau/delta/out의 env(1회 고정분)·ep(한계분) 분해,
   latency(초/턴), 실측 run 비용 목록(분산 폭).
 
-env/ep 분해는 N이 2종 이상인 셀에서 2점 fit으로, 단일 N 셀은 flat/opus의
-env:ep 비율을 차용(approx 플래그). 가격표·캐시 배수는 버전과 함께 동봉.
+셀은 원장 row의 label/model 필드로 정의된다 — label은 작업 유형의 자유 이름표다
+(동봉 실측은 template·flat 두 생성 전략을 라벨로 쓴다). env/ep 분해는 크기가
+다른 N 2점의 1차 fit이므로, 단일 N 셀은 산출되지 않는다.
 """
 import argparse, json, statistics, sys
 from pathlib import Path
-
-ARM_TO_CELL = {"flat": ("flat", "opus"), "flat_sonnet": ("flat", "sonnet"),
-               "flat_haiku": ("flat", "haiku"),
-               "flat_template": ("template", "opus"),
-               "flat_template_sonnet": ("template", "sonnet"),
-               "flat_template_haiku": ("template", "haiku")}
 
 PRICING = {"opus": {"input": 5.0, "output": 25.0},
            "sonnet": {"input": 3.0, "output": 15.0},
@@ -66,10 +61,13 @@ def calibrate(ledger_path, runs_dir, include=None, min_runs=2):
     dropped = {}   # cell key -> {"gate_fail": n, "missing_transcript": n, "usable": n}
     for r in rows:
         if (r.get("rep") == 99 or r["role"] != "run_total"
-                or r["variant"] not in ARM_TO_CELL
                 or (include is not None and not include(r))):
             continue
-        key = "/".join(ARM_TO_CELL[r["variant"]])
+        if not (r.get("label") and r.get("model")):
+            raise SystemExit(
+                f"원장 run {r.get('run_id', '?')}: label/model 필드가 없다 — "
+                "셀은 <label>/<model>로 정의된다 (docs/CALIBRATION.md §4).")
+        key = f"{r['label']}/{r['model']}"
         cnt = dropped.setdefault(key, {"gate_fail": 0, "missing_transcript": 0,
                                        "usable": 0})
         if not (r.get("gate") == "pass" or r["run_id"] in adjudicated):
@@ -81,7 +79,7 @@ def calibrate(ledger_path, runs_dir, include=None, min_runs=2):
             continue
         cnt["usable"] += 1
         turns, s0, cmax = _turn_stats(tr)
-        per_run[r["run_id"]] = {"cell": ARM_TO_CELL[r["variant"]], "n": r["n"],
+        per_run[r["run_id"]] = {"cell": key, "n": r["n"],
                                 "turns": turns, "s0": s0, "cmax": cmax,
                                 "out": r["output_tokens"], "cost": r["cost_usd"],
                                 "wall": r["wall_s"],
@@ -97,7 +95,6 @@ def calibrate(ledger_path, runs_dir, include=None, min_runs=2):
     def med(vals):
         return statistics.median(vals) if vals else None
 
-    # 기준 비율: flat/opus 2점 fit (env vs ep 분해)
     def two_point(runs):
         by_n = {}
         for r in runs:
@@ -116,13 +113,10 @@ def calibrate(ledger_path, runs_dir, include=None, min_runs=2):
         o_env, o_ep = fit("out")
         return d_env, d_ep, t_env, t_ep, o_env, o_ep
 
-    ref = two_point(groups.get(("flat", "opus"), []))
-
     # 산출에서 빠지는 셀은 사유와 함께 기록한다 — 무플래그 drop은 하류에서 원인 불명의
     # insufficient_calibration으로만 보인다 (2026-07-26 감사 #5).
     skipped = {}
-    for cell, runs in groups.items():
-        key = "/".join(cell)
+    for key, runs in groups.items():
         if len(runs) < min_runs:
             m = dropped.get(key, {}).get("missing_transcript", 0)
             extra = f", missing_transcript={m}" if m else ""
@@ -130,23 +124,11 @@ def calibrate(ledger_path, runs_dir, include=None, min_runs=2):
             continue
         s0 = med([r["s0"] for r in runs])
         tp = two_point(runs)
-        approx = False
         if tp is None:
-            # 단일 N 셀: flat/opus의 env:ep 비율 차용
-            if ref is None:
-                skipped[key] = "single_n_without_reference_cell(flat/opus)"
-                continue
-            n = runs[0]["n"]
-            def split(total, env_ref, ep_ref):
-                ratio = env_ref / (env_ref + ep_ref * n) if (env_ref + ep_ref * n) else 0
-                env = total * ratio
-                return env, (total - env) / n
-            d_env, d_ep = split(med([r["cmax"] - r["s0"] for r in runs]), ref[0], ref[1])
-            t_env, t_ep = split(med([r["turns"] for r in runs]), ref[2], ref[3])
-            o_env, o_ep = split(med([r["out"] for r in runs]), ref[4], ref[5])
-            approx = True
-        else:
-            d_env, d_ep, t_env, t_ep, o_env, o_ep = tp
+            # env/ep 분해는 크기가 다른 N 2점이 필요하다 — 단일 N 셀은 산출 불가
+            skipped[key] = "single_n(크기가 다른 N 2점 필요)"
+            continue
+        d_env, d_ep, t_env, t_ep, o_env, o_ep = tp
         # run 분산 밴드용 실측 비용은 셀의 최대 N(전체 규모 지점)에서 취한다.
         # 구 구현은 n == 8 리터럴이었다 — 초기 캘리브레이션 SUT(최대 N=8) 전제가 새어나온 것으로,
         # 최대 N이 다른 프로젝트에서 빈 배열이 되어 밴드가 기본값으로 조용히 퇴화했다.
@@ -160,20 +142,22 @@ def calibrate(ledger_path, runs_dir, include=None, min_runs=2):
             "tau_env": t_env, "tau_ep": t_ep, "out_env": o_env, "out_ep": o_ep,
             "latency_s_per_turn": med([r["wall"] / max(r["turns"], 1) for r in runs]),
             "measured_costs": sorted(round(r["cost"], 2) for r in runs if r["n"] == max_n),
-            "n_runs": len(runs), "env_split_approx": approx,
+            # env_split_approx: 과거 단일-N 근사 경로의 흔적 — 현재는 항상 2점
+            # fit이므로 False 고정 (동봉 파일 스키마 안정성 위해 필드 유지).
+            "n_runs": len(runs), "env_split_approx": False,
         }
         if oa:
             cells[key]["out_approx"] = any(oa)
     # 하네스 혼합 검출(계획 D2): 같은 셀에 서로 다른 하네스의 run이 섞이면 계수가
     # 오염된다 (계수는 하네스의 함수 — S0·τ·out_env가 하네스에 지배됨).
     harness_mixed = {}
-    for cell, runs in groups.items():
+    for key, runs in groups.items():
         hs = sorted({x["harness"] for x in runs})
         if len(hs) > 1:
-            harness_mixed["/".join(cell)] = hs
+            harness_mixed[key] = hs
 
     # 사용 가능 run이 0인 셀(게이트 전멸·트랜스크립트 전멸)은 groups에 없다 — 여기서 기록.
-    # 원장에 variant 자체가 없는 셀은 기록하지 않는다 (의도된 미실험인지 알 수 없다).
+    # 원장에 등장하지 않는 셀은 기록하지 않는다 (의도된 미실험인지 알 수 없다).
     for key, cnt in dropped.items():
         if key in cells or key in skipped or cnt["usable"] > 0:
             continue
@@ -204,7 +188,7 @@ def main(argv=None):
         raise SystemExit(
             "사용 가능한 run이 0건 — 셀이 산출되지 않았다 "
             f"(제외 사유: {cal['skipped_cells'] or '기록 없음 — 원장에 매칭 run 자체가 없음'}). "
-            "원장의 variant/gate/n 필드와 --runs 트랜스크립트 경로를 확인하라 (docs/GUIDE.md §4.4).")
+            "원장의 label/model/gate/n 필드와 --runs 트랜스크립트 경로를 확인하라 (docs/GUIDE.md §4.4).")
     for cell, why in cal["skipped_cells"].items():
         print(f"경고: 셀 {cell} 제외 — {why}", file=sys.stderr)
     for cell, hs in cal.get("harness_mixed", {}).items():
