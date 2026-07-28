@@ -68,6 +68,15 @@ def _display(s):
     return f"{e['method']} {e['path']}" if e["method"] else e["path"]
 
 
+# 한계 고지에서 스캐너/범용 분기가 공유하는 불릿 — 축자 중복이면 문구 수정 시
+# 한쪽만 고치는 드리프트가 난다 (2026-07-28 리뷰).
+_LIM_VARIANCE = ("- 캘리브레이션 셀별 실측 run 분산(±30~46%)이 예측 하한 오차 — "
+                 "구간으로 해석할 것.")
+_LIM_W_RELATIVE = ("- w는 상대 공변량으로만 쓰인다 — 절대 비용 수준은 전적으로 "
+                   "캘리브레이션 계수에서 온다 (w를 일괄 배수해도 결과는 불변).")
+_LIM_UNCAL = "- 미캘리브레이션 셀은 insufficient_calibration으로 표기 (추정치 미제공)."
+
+
 def _plan_interval(cal, label, mdl, slices, p, w_soft, parallel=False):
     """플랜 총액의 예측구간 (low, high).
 
@@ -196,7 +205,9 @@ def main():
     noun = "대상" if generic else "엔드포인트"
     noun_short = "대상" if generic else "EP"
     if generic:
-        meta = (targets_mod.parse_targets(args.targets) if args.targets
+        # 배타 검증과 같은 술어(is not None) — truthiness로 고르면 --targets ""가
+        # n_targets(None)로 새어 TypeError가 난다.
+        meta = (targets_mod.parse_targets(args.targets) if args.targets is not None
                 else targets_mod.n_targets(args.n))
         sls, n = meta["slices"], meta["n"]
         w_source, src_label = meta["w_source"], meta["source_label"]
@@ -215,6 +226,11 @@ def main():
     ws = sorted(s["w_tokens"] for s in sls)
     tertiles = ws[n // 3], ws[2 * n // 3]
     uniform_w = generic and w_source == "uniform"
+    if n > 5_000:
+        # FFD×W_target 그리드×매트릭스 셀 반복이 준2차라 N=3만에 ~20초, 10만이면
+        # 수 분 — 침묵 대신 예고한다 (실측 2026-07-28 리뷰).
+        print(f"경고: N={n:,} — 대상이 많아 플랜 탐색이 수 분 걸릴 수 있습니다.",
+              file=sys.stderr)
 
     # 선택 셀의 유효 벽 = build_plan이 실제로 쓰는 값 (모델 윈도우 캡 반영).
     # 경고·K*·보고서가 이 값을 공유해야 한다 — 요청값을 그대로 쓰면 haiku에
@@ -251,9 +267,10 @@ def main():
         listing = ", ".join(
             f"{_display(s)} (w={s['w_tokens']:,.0f}, {s['w_tokens'] / med:.0f}배)"
             for s in outs[:5])
-        outlier_msg = (f"⚠ 이상치 {len(outs)}건: {listing} — 이 {noun}들은 나머지와 "
-                       "크기가 이질적입니다 — 현재 셀 계수로의 외삽은 과소추정 위험이 "
-                       "있어 별도 라벨로 분리 측정을 권장합니다.")
+        more = f" 외 {len(outs) - 5}건" if len(outs) > 5 else ""
+        outlier_msg = (f"⚠ 이상치 {len(outs)}건: {listing}{more} — 이 {noun}들은 "
+                       "나머지와 크기가 이질적입니다 — 현재 셀 계수로의 외삽은 "
+                       "과소추정 위험이 있어 별도 라벨로 분리 측정을 권장합니다.")
 
     # 단위(그룹) 집계: 스캐너 = 컨트롤러, 범용 = 명시 group만 (합성 무그룹 키는
     # 사용자 어휘가 아니다 — 어떤 산출물에도 노출 금지). 단위별 a,b,c는 만들지
@@ -321,10 +338,8 @@ def main():
          if interval else "- 예측구간: 산출 불가 (캘리브레이션 부족)"),
         f"- 벽: W_soft={p['w_soft']:,} (품질 정책), W_hard={p['w_hard']:,} (모델 상한 반영)",
         (f"- K*_cost={k_star['k_cost']} (셀 단가 최소 K), K*_wall={k_star['k_wall']}"
-         " (W_soft 용량 상한, 평균 w 기준) — 실제 파티션은 그룹 경계·δ̂ 기반이라"
-         " 평균 K와 다를 수 있다" if k_star and generic else
-         f"- K*_cost={k_star['k_cost']} (셀 단가 최소 K), K*_wall={k_star['k_wall']}"
-         " (W_soft 용량 상한, 평균 w 기준) — 실제 파티션은 컨트롤러 경계·δ̂ 기반이라"
+         f" (W_soft 용량 상한, 평균 w 기준) — 실제 파티션은 "
+         f"{'그룹' if generic else '컨트롤러'} 경계·δ̂ 기반이라"
          " 평균 K와 다를 수 있다" if k_star else "- K*: 산출 불가 (캘리브레이션 부족)"),
         (f"- 비용 곡선(셀 합성, 단일 청크·평균 w 기준, USD): "
          f"C(K) ≈ {curve['a']:.2f} + {curve['b']:.3f}·K + {curve['c']:.4f}·K²"
@@ -367,14 +382,13 @@ def main():
                    "json": "- w는 사용자 제공값이다 — 검증 없이 상대 비교에만 쓰인다.",
                    "uniform": "- w는 균일 가정이다 — 상대 배분에 영향 없음."}[w_source]
         lines += ["", "## 한계 고지", "",
-                  "- 캘리브레이션 셀별 실측 run 분산(±30~46%)이 예측 하한 오차 — 구간으로 해석할 것.",
+                  _LIM_VARIANCE,
                   w_limit,
-                  "- w는 상대 공변량으로만 쓰인다 — 절대 비용 수준은 전적으로 캘리브레이션 계수에서"
-                  " 온다 (w를 일괄 배수해도 결과는 불변).",
+                  _LIM_W_RELATIVE,
                   f"- 캘리브레이션 버전: {cal['version']} (N=8 관측 기반 — 대규모 N 외삽 미검증).",
                   "- 캘리브레이션의 n과 이 목록의 N은 **같은 단위**로 세어져야 한다"
                   " (단위 일관성 계약 — docs/CONCEPTS.md).",
-                  "- 미캘리브레이션 셀은 insufficient_calibration으로 표기 (추정치 미제공)."]
+                  _LIM_UNCAL]
     else:
         lines += ["", "## 컨트롤러 단위", "",
                   "> n·Σw·배정 청크는 컨트롤러별로 산출하지만, 비용 계수(a,b,c)는 셀 전역"
@@ -395,14 +409,13 @@ def main():
             lines.append(f"| {e['method']} {e['path']} | {s['w_tokens']:,} "
                          f"| {'Y' if s['external_call'] else ''} | {', '.join(s['unresolved'])} |")
         lines += ["", "## 한계 고지", "",
-                  "- 캘리브레이션 셀별 실측 run 분산(±30~46%)이 예측 하한 오차 — 구간으로 해석할 것.",
+                  _LIM_VARIANCE,
                   "- **작업량 w는 코드 크기만 반영하고 복잡도(분기 수·순환복잡도)는 미반영.** 같은"
                   " 크기라도 분기가 많은 핸들러는 테스트가 더 필요하나 동일하게 취급된다.",
-                  "- w는 상대 공변량으로만 쓰인다 — 절대 비용 수준은 전적으로 캘리브레이션 계수에서"
-                  " 온다 (w를 일괄 배수해도 결과는 불변).",
+                  _LIM_W_RELATIVE,
                   "- 정적 슬라이스는 리플렉션·동적 라우팅·설정 기반 빈을 과소평가할 수 있음.",
                   f"- 캘리브레이션 버전: {cal['version']} (N=8 관측 기반 — 대규모 N 외삽 미검증).",
-                  "- 미캘리브레이션 셀은 insufficient_calibration으로 표기 (추정치 미제공)."]
+                  _LIM_UNCAL]
     (out / "kn-report.md").write_text("\n".join(lines) + "\n")
     print(f"N={n} chunks={p['n_chunks']} k_avg={p['k_avg']} est=${p['total_cost_usd']}")
     if outlier_msg:

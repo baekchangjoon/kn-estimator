@@ -316,6 +316,10 @@ def test_req011_scanner_baseline_unchanged(monkeypatch, capsys):
     cli.main()
     out = capsys.readouterr().out
     assert "N=18 chunks=3 k_avg=6.0 est=$21.18" in out
+    # kn-plan.json 골든 (HANDOFF §2) — 경로·이상치 라인과 무관하게 불변이어야 한다
+    import hashlib
+    digest = hashlib.sha256((SUT / ".kn/kn-plan.json").read_bytes()).hexdigest()
+    assert digest.startswith("9bb69fd2c8257055"), digest
 
 
 # ---- REQ-012 ----------------------------------------------------------------
@@ -436,3 +440,40 @@ def test_unit_n_targets_padding():
     ids = [s["endpoint"]["path"] for s in meta["slices"]]
     assert ids[0] == "unit-001" and ids[-1] == "unit-100"
     assert ids == sorted(ids)
+
+
+# ---- 코드 리뷰 회귀 테스트 (2026-07-28 code-quality 리뷰) ---------------------
+
+def test_review_empty_targets_arg(tmp_path, monkeypatch):
+    """--targets "" 가 truthiness 디스패치로 n_targets(None)에 새면 TypeError."""
+    with pytest.raises(SystemExit) as e:
+        _run(monkeypatch, ["--targets", ""], cwd=tmp_path)
+    assert "목록 파일이 없다" in str(e.value)
+
+
+def test_review_json_content_in_txt_rejected(tmp_path, monkeypatch):
+    """.txt에 담긴 JSON이 '한 줄=대상 하나'로 조용히 오파싱되면 N이 엉터리가 된다."""
+    lst = tmp_path / "mislabeled.txt"
+    lst.write_text(json.dumps([{"id": "a"}, {"id": "b"}]))
+    with pytest.raises(SystemExit) as e:
+        _run(monkeypatch, ["--targets", str(lst)], cwd=tmp_path)
+    assert "JSON처럼 보인다" in str(e.value)
+
+
+def test_review_non_utf8_list_korean_exit(tmp_path, monkeypatch):
+    """비UTF-8 목록 파일은 raw UnicodeDecodeError가 아니라 한국어 SystemExit."""
+    lst = tmp_path / "latin.txt"
+    lst.write_bytes(b"caf\xe9.txt\n")
+    with pytest.raises(SystemExit) as e:
+        _run(monkeypatch, ["--targets", str(lst)], cwd=tmp_path)
+    assert "UTF-8이 아니다" in str(e.value)
+
+
+def test_review_outlier_truncation_marker(tmp_path, monkeypatch, capsys):
+    """이상치가 5건을 넘으면 '외 N건' 절단 표시가 붙는다."""
+    items = [{"id": f"t{i}", "w": 10} for i in range(8)] + \
+            [{"id": f"m{i}", "w": 900} for i in range(7)]
+    lst = tmp_path / "l.json"; lst.write_text(json.dumps(items))
+    _run(monkeypatch, ["--targets", str(lst)], cwd=tmp_path)
+    out = capsys.readouterr().out
+    assert "이상치 7건" in out and "외 2건" in out
