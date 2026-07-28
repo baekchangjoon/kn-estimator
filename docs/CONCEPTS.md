@@ -196,5 +196,6 @@ kn-estimate --targets targets.txt --label analyze --model sonnet \
   선형이므로, 이 도구가 다루는 2차는 계산 복잡도가 아니라 **매 턴 히스토리
   재전송의 누적**(과금 구조 층위)에서 온다.
 - 프롬프트 캐싱을 켜도 2차가 사라지는 게 아니라 **상수가 작아진다** — cache
-  read가 0.1×로 재과금되기 때문이다. §1의 비용 모델에서 P_cache_read 항이 바로
+  read가 0.1×로 재과금되기 때문이다. 이 도구 비용 모델의 P_cache_read 항
+  ([cost-model-explained.md](cost-model-explained.md) 수식 유도 참고)이 바로
   그 잔여 2차 항이고, 캘리브레이션이 그 크기를 실측 계수로 적합한다.
