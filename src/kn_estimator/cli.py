@@ -252,7 +252,7 @@ def main():
             f"{_display(s)} (w={s['w_tokens']:,.0f}, {s['w_tokens'] / med:.0f}배)"
             for s in outs[:5])
         outlier_msg = (f"⚠ 이상치 {len(outs)}건: {listing} — 이 {noun}들은 나머지와 "
-                       "크기가 이질적입니다. 현재 셀 계수로의 외삽은 과소추정 위험이 "
+                       "크기가 이질적입니다 — 현재 셀 계수로의 외삽은 과소추정 위험이 "
                        "있어 별도 라벨로 분리 측정을 권장합니다.")
 
     # 단위(그룹) 집계: 스캐너 = 컨트롤러, 범용 = 명시 group만 (합성 무그룹 키는
@@ -411,7 +411,11 @@ def main():
     if args.groups:
         # "그룹1(q, w, e), 그룹2(z, x, y)로 돌리세요" — 요청 한 줄에 실행 계획으로
         # 답하기 위한 출력. 각 그룹 = 독립 세션 1개 (이 조건이 1차 비용의 전제다).
-        hdr = src_label if generic else Path(args.project_root).resolve().name
+        # 헤더는 소스 라벨의 짧은 형태 — 목록 파일은 stem (스캐너의 project.name과
+        # 같은 급), stdin·--n은 라벨 그대로 (design §3).
+        hdr = ((src_label if src_label == "stdin" or src_label.startswith("--n ")
+                else Path(src_label).stem) if generic
+               else Path(args.project_root).resolve().name)
         print(f"\n[{hdr}] 비용 최적 생성 묶음 ({args.label}×{args.model}):")
         for i, c in enumerate(p["chunks"], 1):
             ep_labels = ", ".join(_display(s) for s in c["endpoints"])

@@ -211,8 +211,7 @@ def test_req007_groups_output(tmp_path, monkeypatch, capsys):
     _run(monkeypatch, ["--targets", str(lst), "--groups"], cwd=tmp_path)
     out = capsys.readouterr().out
     assert "그룹1(" in out and "a1" in out
-    assert "targets" in out.splitlines()[0] or "[targets.json]" in out or \
-        "targets.json" in out          # --groups 헤더 = 소스 라벨 (TypeError 없음)
+    assert "[targets]" in out          # --groups 헤더 = 목록 파일 stem (design §3)
     p = _plan(tmp_path)
     # 용량 이내 fixture — 각 group의 항목 전부가 동일 청크 index
     for grp in ("a", "b"):
@@ -296,6 +295,7 @@ def test_req010_outlier_warning_position(tmp_path, monkeypatch, capsys):
     assert "파일럿" not in warn_block
     report = _report(tmp_path)
     assert "이상치" in report and "monster" in report
+    assert "별도 라벨로 분리 측정" in report
 
 
 def test_req010_no_warning_uniform(tmp_path, monkeypatch, capsys):
@@ -398,11 +398,13 @@ def test_unit_parse_text_file_w(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     a = tmp_path / "a.txt"; a.write_text("x" * 4000)
     b = tmp_path / "b.txt"; b.write_text("y" * 400)
-    lst = tmp_path / "l.txt"; lst.write_text("a.txt\nb.txt\n")
+    z = tmp_path / "zero.txt"; z.write_text("")
+    lst = tmp_path / "l.txt"; lst.write_text("a.txt\nb.txt\nzero.txt\n")
     meta = targets.parse_targets(str(lst))
-    assert meta["w_source"] == "file" and meta["n"] == 2
+    assert meta["w_source"] == "file" and meta["n"] == 3
     ws = {s["endpoint"]["path"]: s["w_tokens"] for s in meta["slices"]}
     assert ws["a.txt"] == 1000 and ws["b.txt"] == 100
+    assert ws["zero.txt"] == 1        # 0바이트 클램프 (design §4.1)
 
 
 def test_unit_parse_json_ok(tmp_path):
