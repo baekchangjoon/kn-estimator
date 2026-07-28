@@ -382,3 +382,48 @@ def test_req013_concepts_doc_linked():
     calib = (REPO / "docs/CALIBRATION.md").read_text()
     assert "--units" not in calib
     assert "미구현" not in calib
+
+
+# ---- targets.py 단위 테스트 (내부 루프) --------------------------------------
+
+def test_unit_parse_text_file_w(tmp_path, monkeypatch):
+    from kn_estimator import targets
+    monkeypatch.chdir(tmp_path)
+    a = tmp_path / "a.txt"; a.write_text("x" * 4000)
+    b = tmp_path / "b.txt"; b.write_text("y" * 400)
+    lst = tmp_path / "l.txt"; lst.write_text("a.txt\nb.txt\n")
+    meta = targets.parse_targets(str(lst))
+    assert meta["w_source"] == "file" and meta["n"] == 2
+    ws = {s["endpoint"]["path"]: s["w_tokens"] for s in meta["slices"]}
+    assert ws["a.txt"] == 1000 and ws["b.txt"] == 100
+
+
+def test_unit_parse_json_ok(tmp_path):
+    from kn_estimator import targets
+    lst = tmp_path / "l.json"
+    lst.write_text(json.dumps([{"id": "a", "w": 3, "group": "G"}, {"id": "b"}]))
+    meta = targets.parse_targets(str(lst))
+    assert meta["w_source"] == "json"
+    ctrl = {s["endpoint"]["path"]: s["endpoint"]["controller"]
+            for s in meta["slices"]}
+    assert ctrl["a"] == "G" and ctrl["b"].startswith("\x00")
+
+
+def test_unit_outliers_below_n4():
+    from kn_estimator import targets
+    sls = [{"w_tokens": w} for w in (1, 1, 100)]
+    assert targets.outliers(sls) == []
+
+
+def test_unit_outliers_median_uniform_silent():
+    from kn_estimator import targets
+    sls = [{"w_tokens": 5.0} for _ in range(10)]
+    assert targets.outliers(sls) == []
+
+
+def test_unit_n_targets_padding():
+    from kn_estimator import targets
+    meta = targets.n_targets(100)
+    ids = [s["endpoint"]["path"] for s in meta["slices"]]
+    assert ids[0] == "unit-001" and ids[-1] == "unit-100"
+    assert ids == sorted(ids)
