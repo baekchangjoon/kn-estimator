@@ -67,6 +67,10 @@ def calibrate(ledger_path, runs_dir, include=None, min_runs=2):
             raise SystemExit(
                 f"원장 run {r.get('run_id', '?')}: label/model 필드가 없다 — "
                 "셀은 <label>/<model>로 정의된다 (docs/CALIBRATION.md §4).")
+        if "/" in r["label"]:
+            raise SystemExit(
+                f"원장 run {r['run_id']}: 라벨에 '/'를 쓸 수 없다 ('{r['label']}') — "
+                "셀 키 구분자와 충돌한다.")
         key = f"{r['label']}/{r['model']}"
         cnt = dropped.setdefault(key, {"gate_fail": 0, "missing_transcript": 0,
                                        "usable": 0})

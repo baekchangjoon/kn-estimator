@@ -159,8 +159,8 @@ def k_stars(cal, label, mdl, w_soft=W_SOFT_DEFAULT):
     cell = cal["cells"].get(f"{label}/{mdl}")
     if cell is None:
         return None
-    # delta_ep는 two_point 경로에서 최소 1로 클램프되지만, 단일 N approx 경로는 0을
-    # 낼 수 있다 (모든 run의 cmax == s0) — 나눗셈 가드.
+    # delta_ep는 two_point에서 최소 1로 클램프되지만, 외부 캘리브레이션 파일이
+    # 0을 담을 수 있다 — 나눗셈 가드.
     k_wall = max(int((w_soft - cell["S0"] - cell["delta_env"])
                      // max(cell["delta_ep"], 1)), 1)
     co = cost_coefficients(cal, label, mdl)

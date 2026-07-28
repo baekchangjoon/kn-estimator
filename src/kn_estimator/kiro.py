@@ -1,22 +1,18 @@
 #!/usr/bin/env python3
-"""kiro2kn — Kiro CLI 세션을 kn-calibrate 입력(트랜스크립트+원장 라인)으로 변환.
+"""kn-kiro — Kiro CLI 세션을 kn-calibrate 입력(트랜스크립트+원장 라인)으로 변환.
 
 계획: docs/superpowers/plans/2026-07-28-kiro2kn-adapter-plan.md
-사용법: docs/CALIBRATION.md §5. stdlib만 사용한다.
+사용법: docs/CALIBRATION.md §5. stdlib만 사용하며, 패키지 설치 시
+`kn-kiro` 콘솔 명령으로 제공된다.
 
-  python research/adapters/kiro2kn.py --list [--cwd <경로>] [--db <sqlite>]
-  # 가장 흔한 경로 — 파일럿 세션 종료 직후, 그 프로젝트 디렉토리에서 한 줄
-  # (스크립트는 kn-estimator 체크아웃의 절대경로로 지정):
-  python <kn-estimator>/research/adapters/kiro2kn.py --latest \\
-      --mode template --model sonnet --n 1 --gate pass [--cost 0.42]
-  # 또는 kn-estimator 저장소 안에서 --cwd로 파일럿 디렉토리를 지정:
-  python research/adapters/kiro2kn.py --latest --cwd ~/work/my-backend \\
-      --mode template --model sonnet --n 1 --gate pass
+  # 가장 흔한 경로 — 파일럿 세션 종료 직후, 그 프로젝트 디렉토리에서 한 줄:
+  kn-kiro --latest --label template --model sonnet --n 1 --gate pass [--cost 0.42]
   # 명시 선택 경로:
-  python research/adapters/kiro2kn.py <conversation_id 접두> \\
-      --mode template --model sonnet --n 1 --rep 1 --gate pass [--cost 0.42] \\
+  kn-kiro --list [--cwd <경로>] [--db <sqlite>]
+  kn-kiro <conversation_id 접두> --label template --model sonnet \
+      --n 1 --rep 1 --gate pass [--cost 0.42] \
       [--run-id <id>] [--runs-dir runs/] [--ledger run_ledger.jsonl] [--db <sqlite>]
-  python research/adapters/kiro2kn.py --sessions-jsonl <이벤트로그> ...  # 원장 전용 폴백
+  kn-kiro --sessions-jsonl <이벤트로그> ...   # 원장 전용 폴백
 
 주의: 계수는 하네스의 함수다 — Kiro run은 Kiro끼리만 캘리브레이션하라
 (원장 라인의 harness 필드가 혼합을 경고한다).
@@ -204,7 +200,7 @@ def main(argv=None):
                     help="게이트 판정 (사용자 책임 — 컴파일 기준 권장)")
     ap.add_argument("--cost", type=float,
                     help="이 run의 비용(USD 환산). 미지정 시 0 + 경고")
-    ap.add_argument("--run-id", help="원장 run_id (기본: <cwd이름>_<variant>-n<n>-r<rep>)")
+    ap.add_argument("--run-id", help="원장 run_id (기본: <cwd이름>_<label>-<model>-n<n>-r<rep>)")
     ap.add_argument("--runs-dir", default="runs", help="트랜스크립트 디렉토리 (기본 runs/)")
     ap.add_argument("--ledger", default="run_ledger.jsonl",
                     help="원장 파일 — 한 줄 append (기본 run_ledger.jsonl)")
