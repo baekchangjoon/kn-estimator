@@ -138,11 +138,16 @@ Kiro의 sqlite(`~/Library/Application Support/kiro-cli/data.sqlite3`,
 conversations_v2)에서 턴별 컨텍스트를 복원해 계약 형식으로 변환한다:
 
 ```bash
-# 파일럿 세션 식별 (cwd 필터·최신순·첫 프롬프트 미리보기)
+# 가장 흔한 경로 — 파일럿 세션 종료 직후, 그 프로젝트 디렉토리에서 한 줄
+# (--latest가 현재 디렉토리의 가장 최근 Kiro 대화를 자동 선택; --mode/--model은
+#  kn-estimate와 같은 어휘. runs/·run_ledger.jsonl은 기본값이라 생략 가능):
+python research/adapters/kiro2kn.py --latest --mode template --model sonnet \
+    --n 1 --gate pass --cost 0.42
+
+# 세션을 명시 선택해야 할 때:
 python research/adapters/kiro2kn.py --list --cwd ~/work/my-backend
-# 변환 + 원장 기록 (id는 접두 매칭 — 모호하면 후보를 나열하고 실패)
-python research/adapters/kiro2kn.py c7719363 --variant flat_template_sonnet \
-    --n 1 --rep 1 --gate pass --cost 0.42 --runs-dir runs/ --ledger run_ledger.jsonl
+python research/adapters/kiro2kn.py c7719363 --mode template --model sonnet \
+    --n 1 --gate pass --cost 0.42
 ```
 
 한계: 현 Kiro 버전은 턴별 토큰 필드를 채우지 않아 컨텍스트는

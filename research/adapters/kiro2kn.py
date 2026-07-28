@@ -5,8 +5,12 @@
 사용법: docs/CALIBRATION.md §5. stdlib만 사용한다.
 
   python research/adapters/kiro2kn.py --list [--cwd <경로>] [--db <sqlite>]
+  # 가장 흔한 경로 — 파일럿 세션 종료 직후, 그 프로젝트 디렉토리에서 한 줄:
+  python research/adapters/kiro2kn.py --latest --mode template --model sonnet \\
+      --n 1 --gate pass [--cost 0.42]
+  # 명시 선택 경로:
   python research/adapters/kiro2kn.py <conversation_id 접두> \\
-      --variant flat_template_sonnet --n 1 --rep 1 --gate pass [--cost 0.42] \\
+      --mode template --model sonnet --n 1 --rep 1 --gate pass [--cost 0.42] \\
       [--run-id <id>] [--runs-dir runs/] [--ledger run_ledger.jsonl] [--db <sqlite>]
   python research/adapters/kiro2kn.py --sessions-jsonl <이벤트로그> ...  # 원장 전용 폴백
 
@@ -22,6 +26,12 @@ from pathlib import Path
 
 DEFAULT_DB = Path.home() / "Library/Application Support/kiro-cli/data.sqlite3"
 HARNESS = "kiro-cli"
+# kn-estimate와 같은 어휘(--mode/--model)를 원장 variant로 조립한다
+VARIANT_OF = {("flat", "opus"): "flat", ("flat", "sonnet"): "flat_sonnet",
+              ("flat", "haiku"): "flat_haiku",
+              ("template", "opus"): "flat_template",
+              ("template", "sonnet"): "flat_template_sonnet",
+              ("template", "haiku"): "flat_template_haiku"}
 
 
 def _connect(db):
@@ -69,6 +79,16 @@ def list_conversations(con, cwd=None):
         t1 = datetime.fromtimestamp(updated / 1000).strftime("%H:%M")
         preview = _first_prompt(value)[:40]
         print(f"  {cid[:8]}  {t0}→{t1}  {len(value.get('history', []))}턴  \"{preview}…\"")
+
+
+def latest(con, cwd):
+    row = con.execute(
+        "SELECT conversation_id FROM conversations_v2 WHERE key = ? "
+        "ORDER BY updated_at DESC LIMIT 1", (cwd,)).fetchone()
+    if not row:
+        raise SystemExit(f"'{cwd}'에서 실행된 Kiro 대화가 없다 — --cwd로 세션의 "
+                         "작업 디렉토리를 지정하거나 --list로 확인하라.")
+    return row[0]
 
 
 def resolve(con, prefix):
@@ -167,12 +187,19 @@ def main(argv=None):
     ap.add_argument("conversation", nargs="?",
                     help="conversation_id 접두 (모호하면 후보를 나열하고 실패)")
     ap.add_argument("--list", action="store_true", help="대화 목록 (최신순)")
-    ap.add_argument("--cwd", help="--list를 이 작업 디렉토리로 필터")
+    ap.add_argument("--latest", action="store_true",
+                    help="현재 디렉토리(또는 --cwd)의 가장 최근 대화를 자동 선택")
+    ap.add_argument("--cwd", help="--list 필터 / --latest 대상 작업 디렉토리 "
+                                  "(기본: 현재 디렉토리)")
     ap.add_argument("--db", default=str(DEFAULT_DB),
                     help=f"Kiro sqlite 경로 (기본 {DEFAULT_DB})")
     ap.add_argument("--sessions-jsonl",
                     help="원장 전용 폴백 — sqlite에서 정리된 대화의 이벤트 로그")
-    ap.add_argument("--variant", help="원장 variant (예: flat_template_sonnet)")
+    ap.add_argument("--mode", choices=["template", "flat"],
+                    help="생성 모드 — kn-estimate와 같은 어휘 (--model과 함께 지정)")
+    ap.add_argument("--model", choices=["sonnet", "opus", "haiku"],
+                    help="대상 모델 (--mode와 함께 지정)")
+    ap.add_argument("--variant", help="원장 variant 직접 지정 (--mode/--model 대신)")
     ap.add_argument("--n", type=int, help="이 run이 처리한 엔드포인트 수")
     ap.add_argument("--rep", type=int, default=1, help="반복 번호")
     ap.add_argument("--gate", choices=["pass", "fail"],
@@ -190,8 +217,14 @@ def main(argv=None):
         list_conversations(con, args.cwd)
         return
 
+    if args.variant and (args.mode or args.model):
+        raise SystemExit("--variant와 --mode/--model은 동시에 쓸 수 없다 — 하나만 지정하라.")
+    if args.mode or args.model:
+        if not (args.mode and args.model):
+            raise SystemExit("--mode와 --model은 함께 지정해야 한다.")
+        args.variant = VARIANT_OF[(args.mode, args.model)]
     if not (args.variant and args.n and args.gate):
-        raise SystemExit("--variant/--n/--gate 는 변환에 필수다.")
+        raise SystemExit("--mode/--model(또는 --variant), --n, --gate 는 변환에 필수다.")
     cost = args.cost
     if cost is None:
         print("경고: --cost 미지정 — cost_usd=0으로 기록한다 (상대 비교 전용). "
@@ -211,10 +244,14 @@ def main(argv=None):
               "kn-calibrate에서 missing_transcript로 계수에서 제외된다)")
         return
 
-    if not args.conversation:
-        raise SystemExit("conversation_id 접두를 지정하거나 --list를 쓰라.")
     con = _connect(args.db)
-    cid = resolve(con, args.conversation)
+    if args.latest:
+        import os
+        cid = latest(con, args.cwd or os.getcwd())
+    elif args.conversation:
+        cid = resolve(con, args.conversation)
+    else:
+        raise SystemExit("conversation_id 접두, --latest, 또는 --list 중 하나를 쓰라.")
     cwd, raw, created, updated = con.execute(
         "SELECT key, value, created_at, updated_at FROM conversations_v2 "
         "WHERE conversation_id = ?", (cid,)).fetchone()

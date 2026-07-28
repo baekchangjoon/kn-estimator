@@ -382,3 +382,52 @@ def test_mixed_real_and_pct_turns(tmp_path):
     assert row["out_approx"] is True
     # out은 전 턴 바이트 근사 합 (실측 200 합산이 아님)
     assert row["output_tokens"] > 150 and row["output_tokens"] != 200
+
+
+# ---- UX 간소화: --latest + --mode/--model (2026-07-28 후속) --------------------
+
+def test_latest_picks_newest_conversation_for_cwd(tmp_path, monkeypatch):
+    """--latest: 현재 디렉토리(기본) 또는 --cwd의 가장 최근 대화를 자동 선택 —
+    목록에서 id를 옮겨 적는 단계를 없앤다."""
+    db = _make_db(tmp_path, [
+        _conversation("aaaa1111-0000-0000-0000-000000000001", "/work/backend",
+                      _pct_turns(3), created=1_000_000_000_000),
+        _conversation("bbbb2222-0000-0000-0000-000000000002", "/work/backend",
+                      _pct_turns(4), created=2_000_000_000_000),   # 더 최근
+        _conversation("cccc3333-0000-0000-0000-000000000003", "/work/other",
+                      _pct_turns(2), created=3_000_000_000_000),   # 다른 cwd
+    ])
+    _run_cli("--db", str(db), "--latest", "--cwd", "/work/backend",
+             "--mode", "template", "--model", "sonnet",
+             "--n", "1", "--gate", "pass", "--cost", "1",
+             "--runs-dir", str(tmp_path / "runs"),
+             "--ledger", str(tmp_path / "ledger.jsonl"))
+    row = json.loads((tmp_path / "ledger.jsonl").read_text().splitlines()[0])
+    assert row["variant"] == "flat_template_sonnet"   # --mode/--model → variant 조립
+    tr = tmp_path / "runs" / row["run_id"] / "transcript.jsonl"
+    assert len(tr.read_text().splitlines()) == 4      # bbbb(4턴)가 선택됨
+
+
+def test_latest_without_match_fails_with_guidance(tmp_path):
+    db = _make_db(tmp_path, [
+        _conversation("aaaa1111-0000-0000-0000-000000000001", "/work/other",
+                      _pct_turns(2))])
+    with pytest.raises(SystemExit) as e:
+        _run_cli("--db", str(db), "--latest", "--cwd", "/work/backend",
+                 "--mode", "template", "--model", "sonnet",
+                 "--n", "1", "--gate", "pass", "--cost", "1",
+                 "--runs-dir", str(tmp_path / "runs"),
+                 "--ledger", str(tmp_path / "l.jsonl"))
+    assert "--list" in str(e.value)
+
+
+def test_mode_model_and_variant_are_mutually_exclusive(tmp_path):
+    db = _make_db(tmp_path, [
+        _conversation("aaaa1111-0000-0000-0000-000000000001", "/w", _pct_turns(2))])
+    with pytest.raises(SystemExit) as e:
+        _run_cli("--db", str(db), "aaaa1111", "--variant", "flat_sonnet",
+                 "--mode", "template", "--model", "sonnet",
+                 "--n", "1", "--gate", "pass", "--cost", "1",
+                 "--runs-dir", str(tmp_path / "runs"),
+                 "--ledger", str(tmp_path / "l.jsonl"))
+    assert "variant" in str(e.value) and "mode" in str(e.value)
