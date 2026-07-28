@@ -111,8 +111,9 @@ def _measured(arm, n):
     동어반복 hit이 된다 (리뷰 지적).
     """
     rows = [json.loads(l) for l in (LEDGER).read_text().splitlines()]
+    label, mdl = arm.split("/")
     return [(r["rep"], r["cost_usd"]) for r in rows
-            if r["variant"] == arm and r.get("n") == n
+            if r.get("label") == label and r.get("model") == mdl and r.get("n") == n
             and r["role"] == "run_total" and r.get("gate") == "pass"
             and r.get("rep") in (1, 2, 3)]
 
@@ -120,11 +121,12 @@ def _measured(arm, n):
 def test_holdout_fit_partial_predict_rest_template_sonnet():
     # N=1 전체 + N=5 rep1로 fit → N=5 예측이 실측 [min,max]·(0.8,1.2) 안
     cal = calibrate.calibrate(LEDGER, RUNS,
-                              include=lambda r: not (r["variant"] == "flat_template_sonnet"
+                              include=lambda r: not (r.get("label") == "template"
+                                                     and r.get("model") == "sonnet"
                                                      and r["n"] == N_MAX
                                                      and r["rep"] in (2, 3)))
     est = model.estimate_cell(cal, "template", "sonnet", [1.0] * N_MAX)
-    costs = [c for _, c in _measured("flat_template_sonnet", N_MAX)]
+    costs = [c for _, c in _measured("template/sonnet", N_MAX)]
     lo, hi = min(costs), max(costs)
     assert lo * 0.8 <= est["cost_usd"] <= hi * 1.2, (est["cost_usd"], lo, hi)
 
@@ -157,19 +159,20 @@ def test_loo_prediction_interval_coverage():
     for ledger, runs in sources:
         rows = [json.loads(l) for l in ledger.read_text().splitlines()]
         n_max = max(r["n"] for r in rows if r["role"] == "run_total")
-        for arm, cell in (("flat_template_sonnet", ("template", "sonnet")),
-                          ("flat_template_haiku", ("template", "haiku")),
-                          ("flat_sonnet", ("flat", "sonnet"))):
+        for lbl, mdl in (("template", "sonnet"), ("template", "haiku"),
+                         ("flat", "sonnet")):
             meas = [(r["rep"], r["cost_usd"]) for r in rows
-                    if r["variant"] == arm and r.get("n") == n_max
+                    if r.get("label") == lbl and r.get("model") == mdl
+                    and r.get("n") == n_max
                     and r["role"] == "run_total" and r.get("gate") == "pass"
                     and r.get("rep") in (1, 2, 3)]
             for held_rep, actual in meas:
                 cal = calibrate.calibrate(
                     ledger, runs,
-                    include=lambda r, a=arm, h=held_rep, n=n_max:
-                        not (r["variant"] == a and r["n"] == n and r["rep"] == h))
-                est = model.estimate_cell(cal, cell[0], cell[1], [1.0] * n_max)
+                    include=lambda r, L=lbl, M=mdl, h=held_rep, n=n_max:
+                        not (r.get("label") == L and r.get("model") == M
+                             and r["n"] == n and r["rep"] == h))
+                est = model.estimate_cell(cal, lbl, mdl, [1.0] * n_max)
                 if est.get("status"):
                     continue
                 tot += 1
@@ -185,7 +188,7 @@ def test_partition_covers_all_and_respects_walls():
     eps = scan.inventory(SP)
     sls = scan.build_slices(SP, eps)
     cal = _cal()
-    p = plan.build_plan(sls, cal, mode="template", mdl="sonnet")
+    p = plan.build_plan(sls, cal, label="template", mdl="sonnet")
     all_eps = [f"{e['endpoint']['method']} {e['endpoint']['path']}" for c in p["chunks"]
                for e in c["endpoints"]]
     assert len(all_eps) == len(sls) and len(set(all_eps)) == len(all_eps)
@@ -206,10 +209,10 @@ def test_cost_is_scale_invariant_in_w():
     _require_sut()
     cal = _cal()
     sls = scan.build_slices(SP, scan.inventory(SP))
-    base = plan.build_plan(sls, cal, mode="template", mdl="sonnet")
+    base = plan.build_plan(sls, cal, label="template", mdl="sonnet")
     for factor in (2, 10):
         scaled = [{**s, "w_tokens": s["w_tokens"] * factor} for s in sls]
-        got = plan.build_plan(scaled, cal, mode="template", mdl="sonnet")
+        got = plan.build_plan(scaled, cal, label="template", mdl="sonnet")
         assert got["total_cost_usd"] == base["total_cost_usd"], (factor, got["total_cost_usd"])
         assert got["n_chunks"] == base["n_chunks"], (factor, got["n_chunks"])
 
@@ -228,7 +231,7 @@ def test_smoke_external_project():
     if not eps:
         _skip(f"외부 샘플에서 엔드포인트 미검출 ({ext})", optional=True)
     sls = scan.build_slices(str(ext), eps)
-    p = plan.build_plan(sls, _cal(), mode="template", mdl="sonnet")
+    p = plan.build_plan(sls, _cal(), label="template", mdl="sonnet")
     assert p["n_chunks"] >= 1
 
 

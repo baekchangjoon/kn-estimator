@@ -45,7 +45,7 @@ def test_build_plan_reports_infeasible_instead_of_crashing():
     """모든 W_target frac이 w_hard를 넘으면 크래시가 아니라 상태를 돌려줘야 한다."""
     _require_sut()
     sls = scan.build_slices(str(SUT), scan.inventory(str(SUT)))
-    got = plan.build_plan(sls, _cal(), mode="template", mdl="sonnet", w_hard=1000)
+    got = plan.build_plan(sls, _cal(), label="template", mdl="sonnet", w_hard=1000)
     assert isinstance(got, dict), type(got)
     assert got.get("status") == "infeasible_w_hard", got.get("status")
     assert "w_hard" in got
@@ -58,7 +58,7 @@ def test_build_plan_still_works_at_realistic_walls():
     """
     _require_sut()
     sls = scan.build_slices(str(SUT), scan.inventory(str(SUT)))
-    got = plan.build_plan(sls, _cal(), mode="template", mdl="sonnet")
+    got = plan.build_plan(sls, _cal(), label="template", mdl="sonnet")
     assert got["n_chunks"] == 3, got["n_chunks"]
     assert got["total_cost_usd"] > 0
 
@@ -179,7 +179,7 @@ def _report():
     _require_sut()
     with tempfile.TemporaryDirectory() as tmp:
         subprocess.run([sys.executable, "-m", "kn_estimator.cli", str(SUT),
-                        "--mode", "template", "--model", "sonnet", "--out-dir", tmp],
+                        "--label", "template", "--model", "sonnet", "--out-dir", tmp],
                        check=True, capture_output=True, cwd=REPO)
         return (Path(tmp) / "kn-report.md").read_text()
 
@@ -207,7 +207,7 @@ def test_plan_interval_is_computed_on_the_actual_partition():
     """
     _require_sut()
     cal, sls = _cal(), scan.build_slices(str(SUT), scan.inventory(str(SUT)))
-    p = plan.build_plan(sls, cal, mode="template", mdl="sonnet")
+    p = plan.build_plan(sls, cal, label="template", mdl="sonnet")
     lo, hi = cli._plan_interval(cal, "template", "sonnet", sls, p, plan.W_SOFT_DEFAULT)
     assert lo < p["total_cost_usd"] < hi, (lo, p["total_cost_usd"], hi)
     # 단일 mega-chunk 이식본보다 좁아야 한다 (그 쪽이 α 민감도를 과장한다)
@@ -227,7 +227,7 @@ def test_matrix_does_not_crash_when_some_cell_is_infeasible():
     _require_sut()
     with tempfile.TemporaryDirectory() as tmp:
         r = subprocess.run([sys.executable, "-m", "kn_estimator.cli", str(SUT),
-                            "--mode", "template", "--model", "haiku",
+                            "--label", "template", "--model", "haiku",
                             "--w-hard", "130000", "--out-dir", tmp],
                            capture_output=True, text=True, cwd=REPO)
         assert r.returncode == 0, f"크래시:\n{r.stderr[-600:]}"

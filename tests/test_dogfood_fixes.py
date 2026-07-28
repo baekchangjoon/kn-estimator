@@ -32,7 +32,7 @@ def _project(tmp_path):
     return str(tmp_path / "proj")
 
 
-def _write_run(tmp_path, run_id, variant, n, cost, turns=10):
+def _write_run(tmp_path, run_id, label, mdl, n, cost, turns=10):
     d = tmp_path / "runs" / run_id
     d.mkdir(parents=True)
     recs = []
@@ -45,7 +45,7 @@ def _write_run(tmp_path, run_id, variant, n, cost, turns=10):
                                            "input_tokens": 10,
                                            "cache_creation_input_tokens": 500}}})
     (d / "transcript.jsonl").write_text("\n".join(json.dumps(r) for r in recs))
-    return {"run_id": run_id, "variant": variant, "role": "run_total",
+    return {"run_id": run_id, "label": label, "model": mdl, "role": "run_total",
             "n": n, "rep": int(run_id[-1]), "gate": "pass", "wall_s": 600,
             "cost_usd": cost, "output_tokens": 40000}
 
@@ -141,10 +141,10 @@ def test_pilot_loop_end_to_end(tmp_path, monkeypatch, capsys):
     """GUIDE §4.4 스키마대로 합성 원장을 만들어 kn-calibrate → 산출 파일로
     kn-estimate --calibration 재실행까지 성공해야 한다."""
     from pathlib import Path
-    rows = [_write_run(tmp_path, "p_t-n1-r1", "flat_template_sonnet", 1, 3.5),
-            _write_run(tmp_path, "p_t-n1-r2", "flat_template_sonnet", 1, 3.7),
-            _write_run(tmp_path, "p_t-n3-r1", "flat_template_sonnet", 3, 6.1),
-            _write_run(tmp_path, "p_t-n3-r2", "flat_template_sonnet", 3, 7.0)]
+    rows = [_write_run(tmp_path, "p_t-n1-r1", "template", "sonnet", 1, 3.5),
+            _write_run(tmp_path, "p_t-n1-r2", "template", "sonnet", 1, 3.7),
+            _write_run(tmp_path, "p_t-n3-r1", "template", "sonnet", 3, 6.1),
+            _write_run(tmp_path, "p_t-n3-r2", "template", "sonnet", 3, 7.0)]
     ledger = tmp_path / "run_ledger.jsonl"
     ledger.write_text("\n".join(json.dumps(r) for r in rows))
     out = tmp_path / "my-cal.json"

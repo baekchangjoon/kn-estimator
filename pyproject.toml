@@ -15,6 +15,7 @@ test = ["pytest>=7"]
 [project.scripts]
 kn-estimate = "kn_estimator.cli:main"
 kn-calibrate = "kn_estimator.calibrate:main"
+kn-kiro = "kn_estimator.kiro:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

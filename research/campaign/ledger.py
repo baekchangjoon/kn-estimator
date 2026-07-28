@@ -1,6 +1,6 @@
 """원장 기록 — kn-calibrate가 소비하는 run_total 행을 append.
 
-calibrate.py가 요구하는 필드: run_id, variant(ARM_TO_CELL 키), role="run_total",
+calibrate.py가 요구하는 필드: run_id, label/model(셀 정의), role="run_total",
 n, rep, gate, output_tokens, cost_usd, wall_s. 비용·토큰은 claude -p의 result.json
 (total_cost_usd, usage)에서 취한다 — 원본 parse_transcript.py의 가격표 재계산 대신
 CLI가 보고하는 실측값을 쓴다 (동일 출처: API usage).
@@ -11,11 +11,11 @@ from pathlib import Path
 
 
 def main():
-    ledger_path, run_id, variant, n, rep, gate, wall_s, result_json = sys.argv[1:9]
+    ledger_path, run_id, label, model, n, rep, gate, wall_s, result_json = sys.argv[1:10]
     res = json.loads(Path(result_json).read_text())
     u = res.get("usage") or {}
     row = {
-        "run_id": run_id, "variant": variant, "role": "run_total",
+        "run_id": run_id, "label": label, "model": model, "role": "run_total",
         "n": int(n), "rep": int(rep), "gate": gate, "wall_s": int(wall_s),
         "cost_usd": res.get("total_cost_usd", 0.0),
         "output_tokens": u.get("output_tokens", 0),

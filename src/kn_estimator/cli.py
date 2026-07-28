@@ -2,7 +2,7 @@
 """kn-estimator CLI: 대상 프로젝트 정적 스캔 → N·w 분포·청크 플랜·비용 예측.
 
 사용:
-  kn-estimate <project_root> [--mode template|flat] [--model sonnet|opus|haiku]
+  kn-estimate <project_root> [--label <작업라벨>] [--model sonnet|opus|haiku]
               [--calibration cal.json] [--w-soft 180000] [--w-hard 900000]
               [--conservative] [--parallel] [--out-dir .kn]
 
@@ -58,7 +58,7 @@ def load_calibration(path=None):
     return cal
 
 
-def _plan_interval(cal, mode, mdl, slices, p, w_soft, parallel=False):
+def _plan_interval(cal, label, mdl, slices, p, w_soft, parallel=False):
     """플랜 총액의 예측구간 (low, high).
 
     α 민감도는 **선택된 파티션 위에서** 재시뮬레이션해 구한다. `estimate_cell`의 비율을
@@ -76,7 +76,7 @@ def _plan_interval(cal, mode, mdl, slices, p, w_soft, parallel=False):
         total = 0.0
         for c in p["chunks"]:
             whs = [s["w_tokens"] / w_mean for s in c["endpoints"]]
-            sim = model.simulate_chunk(cal, mode, mdl, whs, alpha=alpha)
+            sim = model.simulate_chunk(cal, label, mdl, whs, alpha=alpha)
             if sim.get("status"):
                 return None
             # build_plan과 동일한 누적 규칙 (soft 초과 패널티 포함)
@@ -90,7 +90,7 @@ def _plan_interval(cal, mode, mdl, slices, p, w_soft, parallel=False):
     return min(lo_a, base) * b_lo, max(hi_a, base) * b_hi
 
 
-def _env_wall_warning(cal, mode, mdl, w_soft):
+def _env_wall_warning(cal, label, mdl, w_soft):
     """환경 고정분이 W_soft를 사실상 채우면 경고 문자열, 아니면 None.
 
     S0+delta_env가 벽의 90%를 넘으면 EP를 담을 여유가 없어 파티션이 EP당 1청크로
@@ -99,7 +99,7 @@ def _env_wall_warning(cal, mode, mdl, w_soft):
     유도되지 않는 CLI 기본값이라, 새 캘리브레이션을 물릴 때는 게이트 통과 세션의
     컨텍스트 분포로 재산정해야 한다.
     """
-    c = cal["cells"].get(f"{mode}/{mdl}")
+    c = cal["cells"].get(f"{label}/{mdl}")
     if not c:
         return None
     env = c.get("S0", 0) + c.get("delta_env", 0)
@@ -111,31 +111,26 @@ def _env_wall_warning(cal, mode, mdl, w_soft):
 
 
 def build_matrix(sls, cal, w_hard, w_soft, parallel=False):   # 인자 순서 = build_plan
-    """모드×모델 매트릭스 — 권장 플랜과 **같은 실행 가정**(parallel 포함)으로 계산한다.
+    """셀(라벨×모델) 매트릭스 — 캘리브레이션이 **보유한 셀**과 스킵된 셀(사유 병기)로
+    구성한다. 라벨이 자유 문자열이라 고정 그리드를 열거할 수 없다.
 
-    parallel을 전달하지 않으면 권장 플랜(1.05× 할증)과 매트릭스의 동일 셀 총액이
-    어긋난다 (2026-07-26 감사 #7)."""
+    권장 플랜과 같은 실행 가정(parallel 포함)으로 계산한다 — 전달하지 않으면
+    권장 플랜(1.05× 할증)과 매트릭스의 동일 셀 총액이 어긋난다 (2026-07-26 감사 #7)."""
     matrix = {}
-    for mode in ("flat", "template"):
-        for mdl in ("opus", "sonnet", "haiku"):
-            key = f"{mode}/{mdl}"
-            if key not in cal["cells"]:
-                # 캘리브레이션이 스킵 사유를 남겼으면 병기 — 맨 라벨만 보이면
-                # 사용자가 원인(게이트 전멸/표본 부족/기준 셀 부재)을 알 수 없다.
-                why = (cal.get("skipped_cells") or {}).get(key)
-                matrix[key] = (f"insufficient_calibration ({why})" if why
-                               else "insufficient_calibration")
-                continue
-            pm = plan_mod.build_plan(sls, cal, mode=mode, mdl=mdl,
-                                     w_hard=w_hard, w_soft=w_soft, parallel=parallel)
-            if pm.get("status"):
-                # 선택 셀이 아니어도 벽을 못 맞추는 셀이 있을 수 있다 (예: 작은 --w-hard에서
-                # flat/sonnet). 크래시 대신 상태를 표기한다.
-                matrix[key] = pm["status"]
-                continue
-            matrix[key] = {"total_cost_usd": pm["total_cost_usd"],
-                           "n_chunks": pm["n_chunks"], "k_avg": pm["k_avg"],
-                           "wall_h": round(pm["total_wall_s"] / 3600, 1)}
+    for key in sorted(set(cal["cells"]) | set(cal.get("skipped_cells") or {})):
+        if key not in cal["cells"]:
+            matrix[key] = f"insufficient_calibration ({cal['skipped_cells'][key]})"
+            continue
+        label, mdl = key.split("/", 1)
+        pm = plan_mod.build_plan(sls, cal, label=label, mdl=mdl,
+                                 w_hard=w_hard, w_soft=w_soft, parallel=parallel)
+        if pm.get("status"):
+            # 선택 셀이 아니어도 벽을 못 맞추는 셀이 있을 수 있다. 크래시 대신 표기.
+            matrix[key] = pm["status"]
+            continue
+        matrix[key] = {"total_cost_usd": pm["total_cost_usd"],
+                       "n_chunks": pm["n_chunks"], "k_avg": pm["k_avg"],
+                       "wall_h": round(pm["total_wall_s"] / 3600, 1)}
     return matrix
 
 
@@ -143,8 +138,9 @@ def main():
     ap = argparse.ArgumentParser(
         description="Spring 프로젝트 정적 스캔 → 테스트 생성 비용/청크 플랜 예측 (LLM 호출 없음)")
     ap.add_argument("project_root", help="스캔할 Spring 프로젝트 루트 디렉토리")
-    ap.add_argument("--mode", default="template", choices=["template", "flat"],
-                    help="생성 모드 (기본 template)")
+    ap.add_argument("--label", default="template",
+                    help="작업 라벨 — 캘리브레이션 셀 이름의 앞 절반 (자유 문자열; "
+                         "동봉 캘리브레이션의 라벨: template|flat)")
     ap.add_argument("--model", default="sonnet", choices=["sonnet", "opus", "haiku"],
                     help="대상 모델 (기본 sonnet; 미캘리브레이션 셀은 수치 미제공)")
     ap.add_argument("--calibration",
@@ -186,14 +182,14 @@ def main():
     # soft 벽이 hard 벽보다 큰 자기모순 보고서가 나온다.
     eff_soft = min(w_soft, args.w_hard, plan_mod.model_w_hard(args.model))
 
-    warn = _env_wall_warning(cal, args.mode, args.model, eff_soft)
+    warn = _env_wall_warning(cal, args.label, args.model, eff_soft)
     if warn:
         print(warn)
 
-    p = plan_mod.build_plan(sls, cal, mode=args.mode, mdl=args.model,
+    p = plan_mod.build_plan(sls, cal, label=args.label, mdl=args.model,
                             w_hard=args.w_hard, w_soft=w_soft, parallel=args.parallel)
     if p.get("status"):
-        why = (cal.get("skipped_cells") or {}).get(f"{args.mode}/{args.model}")
+        why = (cal.get("skipped_cells") or {}).get(f"{args.label}/{args.model}")
         if p["status"] == "insufficient_calibration" and not why:
             # 원장에 variant 자체가 없던 셀 — 스킵 사유조차 없다. 빈 메시지로 죽지
             # 않고 미측정 사실과 가용 셀을 알린다.
@@ -201,10 +197,10 @@ def main():
         print(f"{p['status']}: {p.get('reason') or why or ''}")
         sys.exit(1)
 
-    interval = _plan_interval(cal, args.mode, args.model, sls, p, p["w_soft"],
+    interval = _plan_interval(cal, args.label, args.model, sls, p, p["w_soft"],
                               parallel=args.parallel)
-    k_star = plan_mod.k_stars(cal, args.mode, args.model, p["w_soft"])
-    curve = plan_mod.cost_coefficients(cal, args.mode, args.model)
+    k_star = plan_mod.k_stars(cal, args.label, args.model, p["w_soft"])
+    curve = plan_mod.cost_coefficients(cal, args.label, args.model)
 
     # 컨트롤러 단위 요약: n(EP 수)·Σw·배정 청크. 단위별 a,b,c는 만들지 않는다 —
     # 컨트롤러 소속의 분산 설명력 검정(research/unit_variance.py)에서 유의한 근거가
@@ -236,12 +232,12 @@ def main():
     lines = [
         "# kn-estimator 보고서", "",
         "> **절대 USD는 비보증** — 캘리브레이션은 단일 프로젝트(tainted-spring-auth-user) 실측 기반이며,",
-        "> 이 보고서의 주 용도는 모드·모델·청크 구성의 **상대 비교**다. 토큰 추정은 bytes/4",
+        "> 이 보고서의 주 용도는 라벨·모델·청크 구성의 **상대 비교**다. 토큰 추정은 bytes/4",
         "> 근사(fallback)를 사용한다.", "",
         f"- 대상: `{args.project_root}`",
         f"- **N = {n}** 엔드포인트 (미해결 슬라이스 {unresolved}건 = {unresolved/n:.0%} — 중앙값 prior 적용)",
         f"- w 분포: p33={tertiles[0]:,} / p66={tertiles[1]:,} / max={ws[-1]:,} tokens (상대 비교용)", "",
-        f"## 권장 플랜 ({args.mode}×{args.model})", "",
+        f"## 권장 플랜 ({args.label}×{args.model})", "",
         f"- 청크 수: **{p['n_chunks']}** (평균 K={p['k_avg']})",
         f"- 예상 총비용: **${p['total_cost_usd']}** / 예상 벽시계: {p['total_wall_s']/3600:.1f}h"
         f" ({'병렬' if args.parallel else '순차'})",
@@ -260,8 +256,8 @@ def main():
          if curve and curve["c"] > 0 else "- 비용 곡선: 산출 불가 (캘리브레이션 부족)"),
         f"- soft 초과 청크: {sum(1 for c in p['chunks'] if c['soft_exceeded'])}건"
         + (f" (요청 W_soft={w_soft:,} → 유효값으로 캡됨)" if p["w_soft"] < w_soft else ""), "",
-        "## 모드×모델 매트릭스 (동일 플랜 로직)", "",
-        "| 구성 | 총비용 | 청크 수 | 평균 K | 벽시계 |", "|---|---|---|---|---|"]
+        "## 셀(라벨×모델) 매트릭스 (동일 플랜 로직)", "",
+        "| 셀 | 총비용 | 청크 수 | 평균 K | 벽시계 |", "|---|---|---|---|---|"]
     for key, v in matrix.items():
         if isinstance(v, str):
             lines.append(f"| {key} | {v} | — | — | — |")
@@ -304,7 +300,7 @@ def main():
         # "그룹1(q, w, e), 그룹2(z, x, y)로 돌리세요" — 요청 한 줄에 실행 계획으로
         # 답하기 위한 출력. 각 그룹 = 독립 세션 1개 (이 조건이 1차 비용의 전제다).
         print(f"\n[{Path(args.project_root).resolve().name}] "
-              f"비용 최적 생성 묶음 ({args.mode}×{args.model}):")
+              f"비용 최적 생성 묶음 ({args.label}×{args.model}):")
         for i, c in enumerate(p["chunks"], 1):
             ep_labels = ", ".join(f"{s['endpoint']['method']} {s['endpoint']['path']}"
                                   for s in c["endpoints"])
@@ -330,7 +326,7 @@ def main():
         # 그룹"이 이미 인쇄된 것을 가리키게.
         print("ℹ 이 프로젝트의 자체 캘리브레이션이 없습니다 — 동봉(tainted-spring-auth-user) 계수로 "
               "추정했습니다 (상대 비교용, 절대 금액 비보증).\n"
-              "  금액 정확도가 필요하면 파일럿 캘리브레이션부터: 같은 모드×모델로 "
+              "  금액 정확도가 필요하면 파일럿 캘리브레이션부터: 같은 라벨×모델로 "
               "크기가 다른 그룹 2개 이상 실측(예: EP 1개짜리 + 최소 그룹) → "
               "kn-calibrate --ledger <원장> --runs <런들> --out my-cal.json → "
               "게이트 통과 세션의 컨텍스트 분포로 --w-soft 재산정 → "

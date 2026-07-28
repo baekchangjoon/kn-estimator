@@ -47,7 +47,7 @@ def test_groups_flag_prints_runnable_grouping(tmp_path, monkeypatch, capsys):
     from pathlib import Path
     root = _project(tmp_path)
     monkeypatch.setattr(sys, "argv",
-                        ["kn-estimate", root, "--mode", "template",
+                        ["kn-estimate", root, "--label", "template",
                          "--model", "sonnet", "--w-soft", "176000", "--groups"])
     cli.main()
     out = capsys.readouterr().out

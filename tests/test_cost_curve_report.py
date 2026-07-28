@@ -63,7 +63,7 @@ def test_report_expresses_cost_curve_and_controller_units(tmp_path, monkeypatch)
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content)
     monkeypatch.setattr(sys, "argv",
-                        ["kn-estimate", str(tmp_path), "--mode", "template",
+                        ["kn-estimate", str(tmp_path), "--label", "template",
                          "--model", "sonnet"])
     cli.main()
     report = (tmp_path / ".kn" / "kn-report.md").read_text()

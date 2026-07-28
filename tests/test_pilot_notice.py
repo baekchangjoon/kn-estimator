@@ -69,7 +69,7 @@ def test_unmeasured_cell_error_names_available_cells(tmp_path, monkeypatch, caps
     미측정 사실과 가용 셀 목록을 알려야 한다 (번들 교체 후 회귀 방지)."""
     root = _project(tmp_path)
     monkeypatch.setattr(sys, "argv",
-                        ["kn-estimate", root, "--mode", "template", "--model", "opus"])
+                        ["kn-estimate", root, "--label", "template", "--model", "opus"])
     try:
         cli.main()
         assert False, "exit해야 한다"

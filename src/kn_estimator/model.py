@@ -6,12 +6,12 @@ env 고정분(delta_env/tau_env/out_env)은 청크당 1회.
 """
 
 
-def _cell(cal, mode, mdl):
-    return cal["cells"].get(f"{mode}/{mdl}")
+def _cell(cal, label, mdl):
+    return cal["cells"].get(f"{label}/{mdl}")
 
 
-def simulate_chunk(cal, mode, mdl, w_hats, alpha=None):
-    c = _cell(cal, mode, mdl)
+def simulate_chunk(cal, label, mdl, w_hats, alpha=None):
+    c = _cell(cal, label, mdl)
     if c is None:
         return {"status": "insufficient_calibration"}
     alpha = cal.get("alpha_default", 0.5) if alpha is None else alpha
@@ -59,13 +59,13 @@ def _run_variance_band(cal):
     return min(0.7, min(ratios)), max(1.3, max(ratios))
 
 
-def estimate_cell(cal, mode, mdl, w_hats):
+def estimate_cell(cal, label, mdl, w_hats):
     """단일 청크 가정의 셀 추정. α 민감도(좁은 구간) × run 분산 밴드(넓은 구간)."""
-    base = simulate_chunk(cal, mode, mdl, w_hats)
+    base = simulate_chunk(cal, label, mdl, w_hats)
     if base.get("status"):
         return base
-    lo = simulate_chunk(cal, mode, mdl, w_hats, alpha=0.0)
-    hi = simulate_chunk(cal, mode, mdl, w_hats, alpha=1.0)
+    lo = simulate_chunk(cal, label, mdl, w_hats, alpha=0.0)
+    hi = simulate_chunk(cal, label, mdl, w_hats, alpha=1.0)
     costs = sorted([lo["cost_usd"], base["cost_usd"], hi["cost_usd"]])
     b_lo, b_hi = _run_variance_band(cal)
     return {**base, "cost_low": costs[0], "cost_high": costs[-1],

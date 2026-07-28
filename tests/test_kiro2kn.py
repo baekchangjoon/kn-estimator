@@ -4,7 +4,6 @@
 합성 sqlite 픽스처는 실측 스키마(conversations_v2, history[i] =
 {user, assistant, request_metadata})를 그대로 재현한다.
 """
-import importlib.util
 import json
 import sqlite3
 import sys
@@ -13,13 +12,8 @@ from pathlib import Path
 
 import pytest
 
-REPO = Path(__file__).resolve().parents[1]
-_spec = importlib.util.spec_from_file_location(
-    "kiro2kn", REPO / "research/adapters/kiro2kn.py")
-kiro2kn = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(kiro2kn)
-
-from kn_estimator import calibrate  # noqa: E402
+from kn_estimator import calibrate
+from kn_estimator import kiro as kiro2kn
 
 
 # ---- 합성 sqlite 픽스처 (실측 스키마 재현) ------------------------------------
@@ -103,7 +97,7 @@ def test_req001b_list_without_cwd_shows_all(tmp_path, capsys):
 def test_req002_convert_pct_fallback_roundtrip(tmp_path):
     cid = "cccc3333-0000-0000-0000-000000000003"
     db = _make_db(tmp_path, [_conversation(cid, "/w", _pct_turns(5), wall_ms=90_000)])
-    _run_cli("--db", str(db), "cccc3333", "--variant", "flat_template_sonnet",
+    _run_cli("--db", str(db), "cccc3333", "--label", "template", "--model", "sonnet",
              "--n", "1", "--rep", "1", "--gate", "pass", "--cost", "1.0",
              "--runs-dir", str(tmp_path / "runs"),
              "--ledger", str(tmp_path / "ledger.jsonl"))
@@ -124,7 +118,7 @@ def test_req003_convert_prefers_real_token_fields(tmp_path):
                                     "cache_write_input_tokens": 0,
                                     "output_tokens": 200}) for i in range(3)]
     db = _make_db(tmp_path, [_conversation(cid, "/w", real)])
-    _run_cli("--db", str(db), "dddd4444", "--variant", "flat_template_sonnet",
+    _run_cli("--db", str(db), "dddd4444", "--label", "template", "--model", "sonnet",
              "--n", "1", "--rep", "1", "--gate", "pass", "--cost", "1.0",
              "--runs-dir", str(tmp_path / "runs"),
              "--ledger", str(tmp_path / "ledger.jsonl"))
@@ -142,7 +136,7 @@ def test_req004_ledger_line_fields(tmp_path):
     cid = "eeee5555-0000-0000-0000-000000000005"
     db = _make_db(tmp_path, [_conversation(cid, "/w/myback", _pct_turns(4),
                                            wall_ms=95_500)])
-    _run_cli("--db", str(db), "eeee5555", "--variant", "flat_template_sonnet",
+    _run_cli("--db", str(db), "eeee5555", "--label", "template", "--model", "sonnet",
              "--n", "2", "--rep", "1", "--gate", "pass", "--cost", "0.5",
              "--runs-dir", str(tmp_path / "runs"),
              "--ledger", str(tmp_path / "ledger.jsonl"))
@@ -151,7 +145,7 @@ def test_req004_ledger_line_fields(tmp_path):
     assert row["out_approx"] is True
     assert row["wall_s"] == 96          # round(95,500ms/1000)
     assert row["role"] == "run_total" and row["gate"] == "pass"
-    assert row["run_id"] == "myback_flat_template_sonnet-n2-r1"
+    assert row["run_id"] == "myback_template-sonnet-n2-r1"
     assert row["output_tokens"] > 0     # assistant 블롭 바이트/4 근사
 
 
@@ -172,7 +166,7 @@ def _harness_ledger(tmp_path, harnesses):
                                            "cache_creation_input_tokens": 500}}}
                     for t in range(8)]
             (d / "transcript.jsonl").write_text("\n".join(json.dumps(r) for r in recs))
-            row = {"run_id": rid, "variant": "flat_template_sonnet",
+            row = {"run_id": rid, "label": "template", "model": "sonnet",
                    "role": "run_total", "n": n, "rep": i, "gate": "pass",
                    "wall_s": 600, "cost_usd": 5.0, "output_tokens": 1000}
             if h is not None:
@@ -202,7 +196,7 @@ def test_req006_schema_mismatch_fails_loudly(tmp_path):
     db = _make_db(tmp_path, [_conversation(cid, "/w", _pct_turns(2),
                                            drop_keys=("model_info",))])
     with pytest.raises(SystemExit) as e:
-        _run_cli("--db", str(db), "ffff6666", "--variant", "flat_template_sonnet",
+        _run_cli("--db", str(db), "ffff6666", "--label", "template", "--model", "sonnet",
                  "--n", "1", "--rep", "1", "--gate", "pass",
                  "--runs-dir", str(tmp_path / "runs"),
                  "--ledger", str(tmp_path / "ledger.jsonl"))
@@ -221,7 +215,7 @@ def test_req007_kiro_pilot_loop_end_to_end(tmp_path, monkeypatch, capsys):
                       _pct_turns(11, 1.0, 1.0), wall_ms=180_000),
     ])
     for cid8, n, rep in (("11117777", 1, 1), ("22228888", 3, 1)):
-        _run_cli("--db", str(db), cid8, "--variant", "flat_template_sonnet",
+        _run_cli("--db", str(db), cid8, "--label", "template", "--model", "sonnet",
                  "--n", str(n), "--rep", str(rep), "--gate", "pass",
                  "--cost", "2.0",
                  "--runs-dir", str(tmp_path / "runs"),
@@ -260,7 +254,7 @@ def test_req008_ambiguous_prefix_fails_with_candidates(tmp_path):
         _conversation("abab0000-1111-0000-0000-000000000002", "/w", _pct_turns(2)),
     ])
     with pytest.raises(SystemExit) as e:
-        _run_cli("--db", str(db), "abab", "--variant", "flat_template_sonnet",
+        _run_cli("--db", str(db), "abab", "--label", "template", "--model", "sonnet",
                  "--n", "1", "--rep", "1", "--gate", "pass",
                  "--runs-dir", str(tmp_path / "runs"),
                  "--ledger", str(tmp_path / "l.jsonl"))
@@ -273,7 +267,7 @@ def test_req008_ambiguous_prefix_fails_with_candidates(tmp_path):
 def test_req009_cost_default_zero_warns(tmp_path, capsys):
     cid = "cafe9999-0000-0000-0000-000000000009"
     db = _make_db(tmp_path, [_conversation(cid, "/w", _pct_turns(2))])
-    _run_cli("--db", str(db), "cafe9999", "--variant", "flat_template_sonnet",
+    _run_cli("--db", str(db), "cafe9999", "--label", "template", "--model", "sonnet",
              "--n", "1", "--rep", "1", "--gate", "pass",
              "--runs-dir", str(tmp_path / "runs"),
              "--ledger", str(tmp_path / "ledger.jsonl"))
@@ -288,7 +282,7 @@ def test_req009_cost_default_zero_warns(tmp_path, capsys):
 def test_req010_run_id_override(tmp_path):
     cid = "beef0000-0000-0000-0000-00000000000a"
     db = _make_db(tmp_path, [_conversation(cid, "/w", _pct_turns(2))])
-    _run_cli("--db", str(db), "beef0000", "--variant", "flat_template_sonnet",
+    _run_cli("--db", str(db), "beef0000", "--label", "template", "--model", "sonnet",
              "--n", "1", "--rep", "1", "--gate", "pass", "--cost", "1",
              "--run-id", "custom-run-7",
              "--runs-dir", str(tmp_path / "runs"),
@@ -314,7 +308,7 @@ def test_req011_sessions_jsonl_fallback_ledger_only(tmp_path):
                   "meta": {"timestamp": 1_784_000_090}}},
     ]
     ev.write_text("\n".join(json.dumps(l, ensure_ascii=False) for l in lines))
-    _run_cli("--sessions-jsonl", str(ev), "--variant", "flat_template_sonnet",
+    _run_cli("--sessions-jsonl", str(ev), "--label", "template", "--model", "sonnet",
              "--n", "1", "--rep", "1", "--gate", "pass", "--cost", "1",
              "--run-id", "fallback-r1",
              "--runs-dir", str(tmp_path / "runs"),
@@ -336,7 +330,7 @@ def test_empty_history_conversation_is_rejected(tmp_path):
     cid = "dead0000-0000-0000-0000-00000000000d"
     db = _make_db(tmp_path, [_conversation(cid, "/w", [])])
     with pytest.raises(SystemExit) as e:
-        _run_cli("--db", str(db), "dead0000", "--variant", "flat_template_sonnet",
+        _run_cli("--db", str(db), "dead0000", "--label", "template", "--model", "sonnet",
                  "--n", "1", "--rep", "1", "--gate", "pass", "--cost", "1",
                  "--runs-dir", str(tmp_path / "runs"),
                  "--ledger", str(tmp_path / "ledger.jsonl"))
@@ -351,7 +345,7 @@ def test_ledger_parent_dir_is_created(tmp_path):
     cid = "feed0000-0000-0000-0000-00000000000e"
     db = _make_db(tmp_path, [_conversation(cid, "/w", _pct_turns(2))])
     ledger = tmp_path / "calib/nested/ledger.jsonl"
-    _run_cli("--db", str(db), "feed0000", "--variant", "flat_template_sonnet",
+    _run_cli("--db", str(db), "feed0000", "--label", "template", "--model", "sonnet",
              "--n", "1", "--rep", "1", "--gate", "pass", "--cost", "1",
              "--runs-dir", str(tmp_path / "runs"), "--ledger", str(ledger))
     assert ledger.exists()
@@ -369,7 +363,7 @@ def test_mixed_real_and_pct_turns(tmp_path):
                                      "output_tokens": 200}, assistant_bytes=400),
              _turn(pct=2.0, assistant_bytes=400)]
     db = _make_db(tmp_path, [_conversation(cid, "/w", turns)])
-    _run_cli("--db", str(db), "aaaa9999", "--variant", "flat_template_sonnet",
+    _run_cli("--db", str(db), "aaaa9999", "--label", "template", "--model", "sonnet",
              "--n", "1", "--rep", "1", "--gate", "pass", "--cost", "1",
              "--runs-dir", str(tmp_path / "runs"),
              "--ledger", str(tmp_path / "ledger.jsonl"))
@@ -398,12 +392,12 @@ def test_latest_picks_newest_conversation_for_cwd(tmp_path):
                       _pct_turns(2), created=3_000_000_000_000),   # 다른 cwd
     ])
     _run_cli("--db", str(db), "--latest", "--cwd", "/work/backend",
-             "--mode", "template", "--model", "sonnet",
+             "--label", "template", "--model", "sonnet",
              "--n", "1", "--gate", "pass", "--cost", "1",
              "--runs-dir", str(tmp_path / "runs"),
              "--ledger", str(tmp_path / "ledger.jsonl"))
     row = json.loads((tmp_path / "ledger.jsonl").read_text().splitlines()[0])
-    assert row["variant"] == "flat_template_sonnet"   # --mode/--model → variant 조립
+    assert row["label"] == "template" and row["model"] == "sonnet"
     tr = tmp_path / "runs" / row["run_id"] / "transcript.jsonl"
     assert len(tr.read_text().splitlines()) == 4      # bbbb(4턴)가 선택됨
 
@@ -414,23 +408,11 @@ def test_latest_without_match_fails_with_guidance(tmp_path):
                       _pct_turns(2))])
     with pytest.raises(SystemExit) as e:
         _run_cli("--db", str(db), "--latest", "--cwd", "/work/backend",
-                 "--mode", "template", "--model", "sonnet",
+                 "--label", "template", "--model", "sonnet",
                  "--n", "1", "--gate", "pass", "--cost", "1",
                  "--runs-dir", str(tmp_path / "runs"),
                  "--ledger", str(tmp_path / "l.jsonl"))
     assert "--list" in str(e.value)
-
-
-def test_mode_model_and_variant_are_mutually_exclusive(tmp_path):
-    db = _make_db(tmp_path, [
-        _conversation("aaaa1111-0000-0000-0000-000000000001", "/w", _pct_turns(2))])
-    with pytest.raises(SystemExit) as e:
-        _run_cli("--db", str(db), "aaaa1111", "--variant", "flat_sonnet",
-                 "--mode", "template", "--model", "sonnet",
-                 "--n", "1", "--gate", "pass", "--cost", "1",
-                 "--runs-dir", str(tmp_path / "runs"),
-                 "--ledger", str(tmp_path / "l.jsonl"))
-    assert "variant" in str(e.value) and "mode" in str(e.value)
 
 
 def test_latest_defaults_to_process_cwd(tmp_path, monkeypatch):
@@ -443,7 +425,7 @@ def test_latest_defaults_to_process_cwd(tmp_path, monkeypatch):
     key = os.getcwd()   # macOS /tmp 심링크 해석까지 실제 값 그대로
     db = _make_db(tmp_path, [
         _conversation("abcd0000-0000-0000-0000-000000000001", key, _pct_turns(3))])
-    _run_cli("--db", str(db), "--latest", "--mode", "template", "--model", "sonnet",
+    _run_cli("--db", str(db), "--latest", "--label", "template", "--model", "sonnet",
              "--n", "1", "--gate", "pass", "--cost", "1",
              "--runs-dir", str(tmp_path / "runs"),
              "--ledger", str(tmp_path / "ledger.jsonl"))
@@ -457,19 +439,11 @@ def test_latest_conflicts_with_explicit_prefix(tmp_path):
         _conversation("aaaa1111-0000-0000-0000-000000000001", "/w", _pct_turns(2))])
     with pytest.raises(SystemExit) as e:
         _run_cli("--db", str(db), "aaaa1111", "--latest",
-                 "--mode", "template", "--model", "sonnet",
+                 "--label", "template", "--model", "sonnet",
                  "--n", "1", "--gate", "pass", "--cost", "1",
                  "--runs-dir", str(tmp_path / "runs"),
                  "--ledger", str(tmp_path / "l.jsonl"))
     assert "--latest" in str(e.value)
 
 
-def test_mode_without_model_fails(tmp_path):
-    db = _make_db(tmp_path, [
-        _conversation("aaaa1111-0000-0000-0000-000000000001", "/w", _pct_turns(2))])
-    with pytest.raises(SystemExit) as e:
-        _run_cli("--db", str(db), "aaaa1111", "--mode", "template",
-                 "--n", "1", "--gate", "pass", "--cost", "1",
-                 "--runs-dir", str(tmp_path / "runs"),
-                 "--ledger", str(tmp_path / "l.jsonl"))
-    assert "--model" in str(e.value)
+

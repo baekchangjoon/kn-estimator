@@ -22,7 +22,7 @@ def _write_run(tmp_path, run_id, n, cost, turns=10):
                                            "input_tokens": 10,
                                            "cache_creation_input_tokens": 500}}})
     (d / "transcript.jsonl").write_text("\n".join(json.dumps(r) for r in recs))
-    return {"run_id": run_id, "variant": "flat_template_sonnet", "role": "run_total",
+    return {"run_id": run_id, "label": "template", "model": "sonnet", "role": "run_total",
             "n": n, "rep": 1, "gate": "pass", "wall_s": 600,
             "cost_usd": cost, "output_tokens": 40000}
 

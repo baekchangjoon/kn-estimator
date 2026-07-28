@@ -30,8 +30,8 @@ def _controller_groups(slices):
     return list(groups.values())
 
 
-def _delta_hat(cal, mode, mdl, s, w_mean):
-    c = cal["cells"][f"{mode}/{mdl}"]
+def _delta_hat(cal, label, mdl, s, w_mean):
+    c = cal["cells"][f"{label}/{mdl}"]
     return c["delta_ep"] * ((s["w_tokens"] / w_mean) ** cal.get("alpha_default", 0.5))
 
 
@@ -61,18 +61,18 @@ def _pack(groups, cap, delta_of):
     return [b[1] for b in bins]
 
 
-def build_plan(slices, cal, mode="template", mdl="sonnet",
+def build_plan(slices, cal, label="template", mdl="sonnet",
                w_hard=W_HARD_DEFAULT, w_soft=W_SOFT_DEFAULT, parallel=False):
-    cell = cal["cells"].get(f"{mode}/{mdl}")
+    cell = cal["cells"].get(f"{label}/{mdl}")
     if cell is None:
-        return {"status": "insufficient_calibration", "mode": mode, "model": mdl}
+        return {"status": "insufficient_calibration", "label": label, "model": mdl}
     requested_w_hard = w_hard
     w_hard = min(w_hard, model_w_hard(mdl))
     # W_soft가 유효 W_hard보다 크면 용량 계산이 hard 벽 위반 청크만 만들어 전 후보가
     # 죽는다 (1M 모델 기준으로 조정한 --w-soft를 haiku에 물려주는 흔한 경로). 캡한다.
     w_soft = min(w_soft, w_hard)
     w_mean = sum(s["w_tokens"] for s in slices) / len(slices)
-    delta_of = lambda s: _delta_hat(cal, mode, mdl, s, w_mean)
+    delta_of = lambda s: _delta_hat(cal, label, mdl, s, w_mean)
     groups = _controller_groups(slices)
     budget_soft = max(w_soft - cell["S0"] - cell["delta_env"], cell["delta_ep"])
 
@@ -83,7 +83,7 @@ def build_plan(slices, cal, mode="template", mdl="sonnet",
         total, wall, chunks, ok = 0.0, 0.0, [], True
         for part in partition:
             whs = [s["w_tokens"] / w_mean for s in part]
-            sim = model.simulate_chunk(cal, mode, mdl, whs)
+            sim = model.simulate_chunk(cal, label, mdl, whs)
             if sim["peak_context"] > w_hard:
                 ok = False
                 break
@@ -114,25 +114,25 @@ def build_plan(slices, cal, mode="template", mdl="sonnet",
                       "무효다 — 컨텍스트 윈도우가 더 큰 모델을 지정하라.")
         else:
             advice = "--w-hard를 올리거나 컨텍스트가 더 큰 모델을 지정하라."
-        return {"status": "infeasible_w_hard", "mode": mode, "model": mdl,
+        return {"status": "infeasible_w_hard", "label": label, "model": mdl,
                 "w_hard": w_hard, "w_soft": w_soft,
                 "requested_w_hard": requested_w_hard,
                 "reason": "모든 W_target 후보에서 청크 peak_context가 w_hard를 초과했다. "
                           + advice}
-    best.update({"mode": mode, "model": mdl, "w_hard": w_hard, "w_soft": w_soft,
+    best.update({"label": label, "model": mdl, "w_hard": w_hard, "w_soft": w_soft,
                  "parallel": parallel,
                  "k_avg": round(len(slices) / best["n_chunks"], 1)})
     return best
 
 
-def cost_coefficients(cal, mode, mdl):
+def cost_coefficients(cal, label, mdl):
     """비용 곡선 C(K) = a + b·K + c·K² 의 계수 — 균일 ŵ=1에서 simulate_chunk의
     닫힌 형태 합성 (단일 청크, USD).
 
     a: 청크당 고정비 (지침 적재·환경분석의 가격 가중합)
     b: EP당 한계비용 (프리픽스 재읽기 + δ 기록 + 산출 토큰)
     c: 컨텍스트 누적 항 (i번째 EP가 앞선 i-1개의 잔류를 지고 읽는 비용)"""
-    cell = cal["cells"].get(f"{mode}/{mdl}")
+    cell = cal["cells"].get(f"{label}/{mdl}")
     if cell is None:
         return None
     p = cal["pricing"][mdl]
@@ -147,7 +147,7 @@ def cost_coefficients(cal, mode, mdl):
             "c": p_cr * cell["tau_ep"] * cell["delta_ep"] / 2}
 
 
-def k_stars(cal, mode, mdl, w_soft=W_SOFT_DEFAULT):
+def k_stars(cal, label, mdl, w_soft=W_SOFT_DEFAULT):
     """설계 v2.3의 K* 병기: K*_wall(평균 w 기준, W_soft 용량이 허용하는 최대 K)과
     K*_cost(단일 청크 단가 C(K)/K가 최소인 K). 실제 파티션은 컨트롤러 경계·δ̂ 기반
     FFD라 평균 K가 이와 다를 수 있다 — 보고서 참고용 지표다.
@@ -156,19 +156,19 @@ def k_stars(cal, mode, mdl, w_soft=W_SOFT_DEFAULT):
     cost(K) = A + B·K + C·K² (A: env 고정분의 가격 가중합, C = P_cr·tau_ep·delta_ep/2)
     이므로 단가 g(K) = A/K + B + C·K의 최소는 K* = √(A/C)다 — 탐색 루프가 없어
     퇴화 계수(delta_ep→0, k_wall 수만)에서도 절단·폭주가 없다."""
-    cell = cal["cells"].get(f"{mode}/{mdl}")
+    cell = cal["cells"].get(f"{label}/{mdl}")
     if cell is None:
         return None
     # delta_ep는 two_point 경로에서 최소 1로 클램프되지만, 단일 N approx 경로는 0을
     # 낼 수 있다 (모든 run의 cmax == s0) — 나눗셈 가드.
     k_wall = max(int((w_soft - cell["S0"] - cell["delta_env"])
                      // max(cell["delta_ep"], 1)), 1)
-    co = cost_coefficients(cal, mode, mdl)
+    co = cost_coefficients(cal, label, mdl)
     if co["c"] <= 0:   # 2차 항 없음 → g 단조 감소 → 벽까지 키우는 게 최적
         return {"k_cost": k_wall, "k_wall": k_wall}
     k0 = round((co["a"] / co["c"]) ** 0.5)
     # 이산 최적은 floor/ceil 중 하나 — 후보를 simulate로 평가해 반올림 오차 방어
     cands = {min(max(k, 1), k_wall) for k in (k0 - 1, k0, k0 + 1)}
     k_cost = min(cands, key=lambda k: model.simulate_chunk(
-        cal, mode, mdl, [1.0] * k)["cost_usd"] / k)
+        cal, label, mdl, [1.0] * k)["cost_usd"] / k)
     return {"k_cost": k_cost, "k_wall": k_wall}
