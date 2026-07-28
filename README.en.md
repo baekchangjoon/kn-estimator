@@ -136,7 +136,7 @@ backed at distinct layers by published work and official documentation:
 
 | Layer | Statement | Source |
 |---|---|---|
-| Billing structure | Every turn re-processes and re-bills the full conversation prefix (cache hits are re-billed at 0.1×) → cumulative input tokens grow quadratically in turns | [Anthropic prompt caching docs](https://platform.claude.com/docs/en/build-with-claude/prompt-caching) |
+| Billing structure | Every turn re-bills the full conversation prefix as input (cache hits are re-billed at 0.1×) → cumulative input tokens grow quadratically in turns | [Anthropic prompt caching docs](https://platform.claude.com/docs/en/build-with-claude/prompt-caching) |
 | Serving systems | Multi-turn conversations repeatedly recompute the KV caches of historical tokens, incurring high serving cost — reuse cuts end-to-end inference cost by up to 70% | [CachedAttention, USENIX ATC'24](https://www.usenix.org/conference/atc24/presentation/gao-bin-cost) ([arXiv:2403.19708](https://arxiv.org/abs/2403.19708)) |
 | Compute complexity | Self-attention compute is O(n²) in sequence length | [Attention Is All You Need](https://arxiv.org/abs/1706.03762) |
 | Evaluation methodology | Agents should be evaluated and optimized jointly on accuracy and cost | [AI Agents That Matter](https://arxiv.org/abs/2407.01502) |
