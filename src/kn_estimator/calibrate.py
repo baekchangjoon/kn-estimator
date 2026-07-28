@@ -84,7 +84,11 @@ def calibrate(ledger_path, runs_dir, include=None, min_runs=2):
         per_run[r["run_id"]] = {"cell": ARM_TO_CELL[r["variant"]], "n": r["n"],
                                 "turns": turns, "s0": s0, "cmax": cmax,
                                 "out": r["output_tokens"], "cost": r["cost_usd"],
-                                "wall": r["wall_s"]}
+                                "wall": r["wall_s"],
+                                # 하네스 메타(계획 D2): 결측은 claude-code의 암묵 별칭
+                                # (이 저장소의 기존 원장은 전부 Claude Code 실측이다)
+                                "harness": r.get("harness") or "claude-code",
+                                "out_approx": r.get("out_approx")}
     cells = {}
     groups = {}
     for v in per_run.values():
@@ -147,6 +151,10 @@ def calibrate(ledger_path, runs_dir, include=None, min_runs=2):
         # 구 구현은 n == 8 리터럴이었다 — 초기 캘리브레이션 SUT(최대 N=8) 전제가 새어나온 것으로,
         # 최대 N이 다른 프로젝트에서 빈 배열이 되어 밴드가 기본값으로 조용히 퇴화했다.
         max_n = max(r["n"] for r in runs)
+        # out 근사 플래그 전파(계획 D4) — 계약상 전파 범위는 calibration.json까지.
+        # 필드가 있는 run이 하나라도 근사면 셀도 근사로 표시한다. 필드가 전무한
+        # 기존 원장에서는 키를 만들지 않아 동봉 번들이 바이트 불변으로 유지된다.
+        oa = [x["out_approx"] for x in runs if x.get("out_approx") is not None]
         cells[key] = {
             "S0": s0, "delta_env": d_env, "delta_ep": d_ep,
             "tau_env": t_env, "tau_ep": t_ep, "out_env": o_env, "out_ep": o_ep,
@@ -154,6 +162,16 @@ def calibrate(ledger_path, runs_dir, include=None, min_runs=2):
             "measured_costs": sorted(round(r["cost"], 2) for r in runs if r["n"] == max_n),
             "n_runs": len(runs), "env_split_approx": approx,
         }
+        if oa:
+            cells[key]["out_approx"] = any(oa)
+    # 하네스 혼합 검출(계획 D2): 같은 셀에 서로 다른 하네스의 run이 섞이면 계수가
+    # 오염된다 (계수는 하네스의 함수 — S0·τ·out_env가 하네스에 지배됨).
+    harness_mixed = {}
+    for cell, runs in groups.items():
+        hs = sorted({x["harness"] for x in runs})
+        if len(hs) > 1:
+            harness_mixed["/".join(cell)] = hs
+
     # 사용 가능 run이 0인 셀(게이트 전멸·트랜스크립트 전멸)은 groups에 없다 — 여기서 기록.
     # 원장에 variant 자체가 없는 셀은 기록하지 않는다 (의도된 미실험인지 알 수 없다).
     for key, cnt in dropped.items():
@@ -161,8 +179,11 @@ def calibrate(ledger_path, runs_dir, include=None, min_runs=2):
             continue
         parts = [f"{k}={v}" for k, v in cnt.items() if k != "usable" and v]
         skipped[key] = f"no_usable_runs({', '.join(parts)})"
-    return {"version": "kn-cal-1", "source": str(ledger_path), "pricing": PRICING,
-            "alpha_default": 0.5, "cells": cells, "skipped_cells": skipped}
+    out = {"version": "kn-cal-1", "source": str(ledger_path), "pricing": PRICING,
+           "alpha_default": 0.5, "cells": cells, "skipped_cells": skipped}
+    if harness_mixed:   # 비어 있으면 키를 만들지 않는다 — 동봉 번들 바이트 불변 유지
+        out["harness_mixed"] = harness_mixed
+    return out
 
 
 def main(argv=None):
@@ -186,6 +207,10 @@ def main(argv=None):
             "원장의 variant/gate/n 필드와 --runs 트랜스크립트 경로를 확인하라 (docs/GUIDE.md §4.4).")
     for cell, why in cal["skipped_cells"].items():
         print(f"경고: 셀 {cell} 제외 — {why}", file=sys.stderr)
+    for cell, hs in cal.get("harness_mixed", {}).items():
+        print(f"경고: 셀 {cell}에 서로 다른 harness가 섞였다: {', '.join(hs)} — "
+              "계수는 하네스의 함수라 혼합은 계수를 오염시킨다. 하네스별로 원장을 "
+              "분리해 캘리브레이션하라.", file=sys.stderr)
     text = json.dumps(cal, indent=1, ensure_ascii=False)
     if args.out:
         args.out.write_text(text)

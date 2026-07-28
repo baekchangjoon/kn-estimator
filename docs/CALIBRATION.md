@@ -75,7 +75,7 @@ run당 1줄 JSON (필수 필드):
 ```json
 {"run_id": "myproj_flat_template_sonnet-n1-r1", "variant": "flat_template_sonnet",
  "role": "run_total", "n": 1, "rep": 1, "gate": "pass",
- "cost_usd": 5.16, "output_tokens": 69007, "wall_s": 818}
+ "cost_usd": 5.16, "output_tokens": 69007, "wall_s": 818, "harness": "claude-code"}
 ```
 
 `variant` → 셀 매핑: `flat`=flat/opus, `flat_sonnet`, `flat_haiku`,
@@ -103,7 +103,8 @@ for u in seen.values():
              + u.get("cache_creation_input_tokens", 0) * p_in * 2  # 1h 캐시 쓰기 2×
              + u.get("output_tokens", 0) * p_out) / 1e6
     out += u.get("output_tokens", 0)
-print(f'"cost_usd": {cost:.2f}, "output_tokens": {out}, "turns": {len(seen)}')
+print(f'"cost_usd": {cost:.2f}, "output_tokens": {out}, "turns": {len(seen)}, '
+      f'"harness": "claude-code"')
 ```
 
 ## 5. Claude Code가 아닌 에이전트에서 쓰기 (Kiro, Antigravity, Cursor 등)
@@ -111,7 +112,9 @@ print(f'"cost_usd": {cost:.2f}, "output_tokens": {out}, "turns": {len(seen)}')
 두 입력의 요구가 다르다:
 
 - **원장은 도구 무관이다** — 어떤 에이전트든 그 run의 총비용·총출력토큰·게이트만
-  옮겨 적으면 된다 (비용은 해당 에이전트의 과금 체계로 계산).
+  옮겨 적으면 된다 (비용은 해당 에이전트의 과금 체계로 계산). 원장 라인의
+  `harness` 필드에 하네스 이름을 기입하라 — kn-calibrate는 **같은 셀에 서로 다른
+  하네스가 섞이면 경고**한다 (필드가 없는 기존 원장 행은 `claude-code`로 간주).
 - **트랜스크립트는 형식 계약이 있다.** `kn-calibrate`가 읽는 최소 스키마는
   "한 줄 = JSON 하나, 턴(assistant 응답)마다":
 
@@ -126,11 +129,32 @@ print(f'"cost_usd": {cost:.2f}, "output_tokens": {out}, "turns": {len(seen)}')
   `cache_read_input_tokens`에 넣고 나머지를 0으로 두면 된다 — kn-calibrate는 세
   필드의 합으로 S0(첫 턴)·cmax(최대)·τ(줄 수)만 계산한다. 자기 에이전트의 세션
   로그를 이 형태로 바꾸는 변환 스크립트 하나가 곧 어댑터다.
+
+### 실증된 어댑터 예시 — Kiro CLI (`kiro2kn`)
+
+Kiro CLI용 어댑터가 동봉돼 있다: `research/adapters/kiro2kn.py`
+(계획·스키마 근거: `docs/superpowers/plans/2026-07-28-kiro2kn-adapter-plan.md`).
+Kiro의 sqlite(`~/Library/Application Support/kiro-cli/data.sqlite3`,
+conversations_v2)에서 턴별 컨텍스트를 복원해 계약 형식으로 변환한다:
+
+```bash
+# 파일럿 세션 식별 (cwd 필터·최신순·첫 프롬프트 미리보기)
+python research/adapters/kiro2kn.py --list --cwd ~/work/my-backend
+# 변환 + 원장 기록 (id는 접두 매칭 — 모호하면 후보를 나열하고 실패)
+python research/adapters/kiro2kn.py c7719363 --variant flat_template_sonnet \
+    --n 1 --rep 1 --gate pass --cost 0.42 --runs-dir runs/ --ledger run_ledger.jsonl
+```
+
+한계: 현 Kiro 버전은 턴별 토큰 필드를 채우지 않아 컨텍스트는
+`context_usage_percentage×윈도우`로, 출력 토큰은 응답 본문 바이트/4로
+근사한다(원장·셀에 `out_approx: true`로 표기됨). 비용은 Kiro 크레딧의 USD
+환산액을 `--cost`로 직접 지정한다.
+
 - **주의 — 계수는 하네스의 함수다.** S0는 지침·시스템 프롬프트 크기, τ·out_env는
-  에이전트의 행동 패턴에서 온다 (캠페인 실측: 같은 프로젝트에서도 하네스 세대에
-  따라 env가 3~4배). 에이전트를 바꾸면 **반드시 그 에이전트로 재캘리브레이션**해야
-  하고, 셀의 실질 의미는 "모드×모델×하네스"다. 동봉 캘리브레이션은 Claude Code
-  하네스 실측이므로 타 에이전트에서는 상대 비교 참고치로만 쓰라.
+  에이전트의 행동 패턴에서 온다 (실측: Kiro S0≈13.8K vs Claude Code 66K).
+  에이전트를 바꾸면 **반드시 그 에이전트로 재캘리브레이션**해야 하고, 셀의 실질
+  의미는 "모드×모델×하네스"다. 동봉 캘리브레이션은 Claude Code 하네스 실측이므로
+  타 에이전트에서는 상대 비교 참고치로만 쓰라.
 
 ## 6. 엔드포인트 너머 — 범용화 (로드맵, 미구현)
 
