@@ -134,7 +134,7 @@ w_i는 절대 토큰이 아니라 δ·out·τ의 곱셈 공변량(ŵ^α)으로�
 
 | 층위 | 내용 | 출처 |
 |---|---|---|
-| 과금 구조 | 매 턴 전체 대화 프리픽스가 입력으로 다시 처리·과금된다 (캐시 히트도 0.1×로 재과금) → 누적 입력 토큰이 턴 수에 2차 | [Anthropic prompt caching 문서](https://platform.claude.com/docs/en/build-with-claude/prompt-caching) |
+| 과금 구조 | 매 턴 전체 대화 프리픽스가 입력으로 다시 과금된다 (캐시 히트도 0.1×로 재과금) → 누적 입력 토큰이 턴 수에 2차 | [Anthropic prompt caching 문서](https://platform.claude.com/docs/en/build-with-claude/prompt-caching) |
 | 서빙 시스템 | 멀티턴 대화는 역사 토큰의 KV 캐시를 반복 재계산해 서빙 비용이 높다 — 재사용으로 e2e 추론 비용 최대 70% 절감 | [CachedAttention, USENIX ATC'24](https://www.usenix.org/conference/atc24/presentation/gao-bin-cost) ([arXiv:2403.19708](https://arxiv.org/abs/2403.19708)) |
 | 계산 복잡도 | self-attention 계산량은 시퀀스 길이에 O(n²) | [Attention Is All You Need](https://arxiv.org/abs/1706.03762) |
 | 평가 방법론 | 에이전트는 정확도와 비용을 함께 최적화 대상으로 평가해야 한다 | [AI Agents That Matter](https://arxiv.org/abs/2407.01502) |
