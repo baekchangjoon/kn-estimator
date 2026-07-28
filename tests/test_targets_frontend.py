@@ -48,6 +48,14 @@ def _plan(cwd):
     return json.loads((cwd / ".kn/kn-plan.json").read_text())
 
 
+def _section(report, header):
+    """header로 시작하는 섹션의 본문만 (다음 '## ' 전까지)."""
+    start = report.index(header)
+    body = report[start + len(header):]
+    nxt = body.find("\n## ")
+    return report[start:start + len(header) + (nxt if nxt != -1 else len(body))]
+
+
 # ---- REQ-001 ----------------------------------------------------------------
 
 def test_req001_text_list(tmp_path, monkeypatch, capsys):
@@ -101,8 +109,7 @@ def test_req004_auto_w_group(tmp_path, monkeypatch, capsys):
                  if ln.startswith("|") and ".md" in ln][0]
     assert "big.md" in first_row
     # 같은 디렉터리(docs sub)의 파일 2개가 같은 그룹 행으로 집계
-    grp_start = report.index("## 그룹 단위")
-    grp_rows = [ln for ln in report[grp_start:].splitlines()
+    grp_rows = [ln for ln in _section(report, "## 그룹 단위").splitlines()
                 if ln.startswith("|") and "docs sub" in ln]
     assert len(grp_rows) == 1 and "| 2 |" in grp_rows[0]
     # 0바이트 파일도 w>=1로 포함 (N=3이 이미 검증하지만 명시 확인)
@@ -222,8 +229,8 @@ def test_req007_mixed_group_section(tmp_path, monkeypatch, capsys):
     lst = tmp_path / "targets.json"; lst.write_text(json.dumps(items))
     _run(monkeypatch, ["--targets", str(lst)], cwd=tmp_path)
     report = _report(tmp_path)
-    grp_start = report.index("## 그룹 단위")
-    grp_rows = [ln for ln in report[grp_start:].splitlines() if ln.startswith("| ")]
+    grp_rows = [ln for ln in _section(report, "## 그룹 단위").splitlines()
+                if ln.startswith("| ")]
     assert any("G" in ln for ln in grp_rows)
     assert not any("x1" in ln or "x2" in ln for ln in grp_rows)
     raw = (tmp_path / ".kn/kn-plan.json").read_text()
