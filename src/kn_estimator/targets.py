@@ -85,7 +85,11 @@ def parse_targets(arg, stdin=None):
     """arg: 목록 파일 경로 또는 '-'. 반환: {"slices", "n", "w_source", "source_label"}
     w_source ∈ {"file", "json", "uniform"} — 리포트 한계 고지 문구 분기용."""
     if arg == "-":
-        text, source_label = (stdin or sys.stdin).read(), "stdin"
+        try:
+            text = (stdin or sys.stdin).read()
+        except UnicodeDecodeError as e:
+            raise SystemExit(f"--targets stdin이 UTF-8이 아니다: {e}")
+        source_label = "stdin"
         if text.lstrip()[:1] in ("[", "{"):
             raise SystemExit("stdin은 텍스트 목록 전용이다 — JSON 목록은 "
                              ".json 파일로 지정하라 (--targets list.json).")
@@ -93,9 +97,20 @@ def parse_targets(arg, stdin=None):
         p = Path(arg)
         if not p.is_file():
             raise SystemExit(f"--targets 목록 파일이 없다: {arg}")
-        text, source_label = p.read_text(), arg
-        if arg.endswith(".json"):
+        try:
+            # 기존 관용(errors="replace")을 따르지 않는다 — id는 경로라서 뭉개면
+            # "미실존 파일"이 되어 조용히 균일 w로 폴백한다. 시끄럽게 죽는다.
+            text = p.read_text(encoding="utf-8")
+        except UnicodeDecodeError as e:
+            raise SystemExit(f"--targets 목록이 UTF-8이 아니다: {arg}\n{e}")
+        source_label = arg
+        if arg.lower().endswith(".json"):
             return _parse_json(text, arg)
+        if text.lstrip()[:1] in ("[", "{"):
+            # 확장자만으로 판별하면 .txt에 담긴 JSON이 "한 줄 = 대상 하나"로
+            # 조용히 오파싱돼 그럴듯한 오답(N=줄 수)이 나온다.
+            raise SystemExit(f"--targets 목록이 JSON처럼 보인다 ({arg}) — "
+                             "JSON 목록은 .json 확장자로 지정하라.")
     ids = [ln.strip() for ln in text.splitlines()]
     ids = [i for i in ids if i and not i.startswith("#")]
     if not ids:
