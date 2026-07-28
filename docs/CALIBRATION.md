@@ -138,11 +138,15 @@ Kiro의 sqlite(`~/Library/Application Support/kiro-cli/data.sqlite3`,
 conversations_v2)에서 턴별 컨텍스트를 복원해 계약 형식으로 변환한다:
 
 ```bash
-# 가장 흔한 경로 — 파일럿 세션 종료 직후, 그 프로젝트 디렉토리에서 한 줄
-# (--latest가 현재 디렉토리의 가장 최근 Kiro 대화를 자동 선택; --mode/--model은
-#  kn-estimate와 같은 어휘. runs/·run_ledger.jsonl은 기본값이라 생략 가능):
-python research/adapters/kiro2kn.py --latest --mode template --model sonnet \
-    --n 1 --gate pass --cost 0.42
+# 가장 흔한 경로 — 파일럿 세션 종료 직후, 그 프로젝트 디렉토리에서 한 줄.
+# --latest가 현재 디렉토리의 가장 최근 Kiro 대화를 자동 선택하고, --mode/--model은
+# kn-estimate와 같은 어휘다 (runs/·run_ledger.jsonl은 기본값이라 생략 가능).
+# 스크립트는 kn-estimator 체크아웃의 절대경로로 지정한다:
+python <kn-estimator>/research/adapters/kiro2kn.py --latest \
+    --mode template --model sonnet --n 1 --gate pass --cost 0.42
+# kn-estimator 저장소 안에서 실행한다면 --cwd로 파일럿 디렉토리를 지정:
+python research/adapters/kiro2kn.py --latest --cwd ~/work/my-backend \
+    --mode template --model sonnet --n 1 --gate pass --cost 0.42
 
 # 세션을 명시 선택해야 할 때:
 python research/adapters/kiro2kn.py --list --cwd ~/work/my-backend

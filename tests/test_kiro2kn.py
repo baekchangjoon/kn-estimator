@@ -386,9 +386,9 @@ def test_mixed_real_and_pct_turns(tmp_path):
 
 # ---- UX 간소화: --latest + --mode/--model (2026-07-28 후속) --------------------
 
-def test_latest_picks_newest_conversation_for_cwd(tmp_path, monkeypatch):
-    """--latest: 현재 디렉토리(기본) 또는 --cwd의 가장 최근 대화를 자동 선택 —
-    목록에서 id를 옮겨 적는 단계를 없앤다."""
+def test_latest_picks_newest_conversation_for_cwd(tmp_path):
+    """--latest: --cwd의 가장 최근 대화를 자동 선택 — 목록에서 id를 옮겨 적는
+    단계를 없앤다."""
     db = _make_db(tmp_path, [
         _conversation("aaaa1111-0000-0000-0000-000000000001", "/work/backend",
                       _pct_turns(3), created=1_000_000_000_000),
@@ -431,3 +431,45 @@ def test_mode_model_and_variant_are_mutually_exclusive(tmp_path):
                  "--runs-dir", str(tmp_path / "runs"),
                  "--ledger", str(tmp_path / "l.jsonl"))
     assert "variant" in str(e.value) and "mode" in str(e.value)
+
+
+def test_latest_defaults_to_process_cwd(tmp_path, monkeypatch):
+    """--cwd 미지정 시 프로세스 현재 디렉토리가 기준 — --latest의 존재 이유인
+    기본 경로 분기를 직접 검증한다."""
+    proj = tmp_path / "projdir"
+    proj.mkdir()
+    import os
+    monkeypatch.chdir(proj)
+    key = os.getcwd()   # macOS /tmp 심링크 해석까지 실제 값 그대로
+    db = _make_db(tmp_path, [
+        _conversation("abcd0000-0000-0000-0000-000000000001", key, _pct_turns(3))])
+    _run_cli("--db", str(db), "--latest", "--mode", "template", "--model", "sonnet",
+             "--n", "1", "--gate", "pass", "--cost", "1",
+             "--runs-dir", str(tmp_path / "runs"),
+             "--ledger", str(tmp_path / "ledger.jsonl"))
+    assert (tmp_path / "ledger.jsonl").exists()
+
+
+def test_latest_conflicts_with_explicit_prefix(tmp_path):
+    """--latest와 접두 동시 지정은 조용한 무시가 아니라 오류다 — 다른 세션이
+    맞는 run_id로 기록되는 무증상 오염을 막는다."""
+    db = _make_db(tmp_path, [
+        _conversation("aaaa1111-0000-0000-0000-000000000001", "/w", _pct_turns(2))])
+    with pytest.raises(SystemExit) as e:
+        _run_cli("--db", str(db), "aaaa1111", "--latest",
+                 "--mode", "template", "--model", "sonnet",
+                 "--n", "1", "--gate", "pass", "--cost", "1",
+                 "--runs-dir", str(tmp_path / "runs"),
+                 "--ledger", str(tmp_path / "l.jsonl"))
+    assert "--latest" in str(e.value)
+
+
+def test_mode_without_model_fails(tmp_path):
+    db = _make_db(tmp_path, [
+        _conversation("aaaa1111-0000-0000-0000-000000000001", "/w", _pct_turns(2))])
+    with pytest.raises(SystemExit) as e:
+        _run_cli("--db", str(db), "aaaa1111", "--mode", "template",
+                 "--n", "1", "--gate", "pass", "--cost", "1",
+                 "--runs-dir", str(tmp_path / "runs"),
+                 "--ledger", str(tmp_path / "l.jsonl"))
+    assert "--model" in str(e.value)

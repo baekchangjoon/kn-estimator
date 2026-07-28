@@ -5,9 +5,13 @@
 사용법: docs/CALIBRATION.md §5. stdlib만 사용한다.
 
   python research/adapters/kiro2kn.py --list [--cwd <경로>] [--db <sqlite>]
-  # 가장 흔한 경로 — 파일럿 세션 종료 직후, 그 프로젝트 디렉토리에서 한 줄:
-  python research/adapters/kiro2kn.py --latest --mode template --model sonnet \\
-      --n 1 --gate pass [--cost 0.42]
+  # 가장 흔한 경로 — 파일럿 세션 종료 직후, 그 프로젝트 디렉토리에서 한 줄
+  # (스크립트는 kn-estimator 체크아웃의 절대경로로 지정):
+  python <kn-estimator>/research/adapters/kiro2kn.py --latest \\
+      --mode template --model sonnet --n 1 --gate pass [--cost 0.42]
+  # 또는 kn-estimator 저장소 안에서 --cwd로 파일럿 디렉토리를 지정:
+  python research/adapters/kiro2kn.py --latest --cwd ~/work/my-backend \\
+      --mode template --model sonnet --n 1 --gate pass
   # 명시 선택 경로:
   python research/adapters/kiro2kn.py <conversation_id 접두> \\
       --mode template --model sonnet --n 1 --rep 1 --gate pass [--cost 0.42] \\
@@ -19,6 +23,7 @@
 """
 import argparse
 import json
+import os
 import sqlite3
 import sys
 from datetime import datetime
@@ -217,6 +222,11 @@ def main(argv=None):
         list_conversations(con, args.cwd)
         return
 
+    if args.latest and args.conversation:
+        raise SystemExit("--latest와 conversation_id 접두는 동시에 쓸 수 없다 — "
+                         "다른 세션이 조용히 선택되는 것을 막기 위해서다.")
+    if args.latest and args.sessions_jsonl:
+        raise SystemExit("--latest와 --sessions-jsonl은 동시에 쓸 수 없다.")
     if args.variant and (args.mode or args.model):
         raise SystemExit("--variant와 --mode/--model은 동시에 쓸 수 없다 — 하나만 지정하라.")
     if args.mode or args.model:
@@ -246,7 +256,6 @@ def main(argv=None):
 
     con = _connect(args.db)
     if args.latest:
-        import os
         cid = latest(con, args.cwd or os.getcwd())
     elif args.conversation:
         cid = resolve(con, args.conversation)
