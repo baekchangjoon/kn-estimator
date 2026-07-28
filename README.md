@@ -149,7 +149,9 @@ kn-calibrate --ledger run_ledger.jsonl --runs runs/ --out my-cal.json
 kn-estimate <root> --calibration my-cal.json --w-soft <재산정값>
 ```
 
-원장 스키마와 상세 절차: [docs/GUIDE.md](docs/GUIDE.md) §4.4.
+원장·트랜스크립트를 누가 어떻게 만드는지(에이전트 지시 템플릿, 타 에이전트
+어댑터, 기록 스니펫 포함): **[docs/CALIBRATION.md](docs/CALIBRATION.md)**.
+원장 스키마 요약: [docs/GUIDE.md](docs/GUIDE.md) §4.4.
 
 ## 구성
 
@@ -183,6 +185,7 @@ SUT(petclinic 포크)·외부 샘플 의존 테스트는 해당 경로가 없으
 | 문서 | 내용 |
 |---|---|
 | [docs/GUIDE.md](docs/GUIDE.md) | 동작 원리·파이프라인·CLI·파일럿 캘리브레이션 워크플로 |
+| [docs/CALIBRATION.md](docs/CALIBRATION.md) | 캘리브레이션 실전 — 원장·트랜스크립트 생성 주체, 에이전트 지시 템플릿, 타 에이전트 어댑터 |
 | [docs/cost-model-explained.md](docs/cost-model-explained.md) | 왜 2차인가, 청크가 왜 1차로 만드나, K는 왜 중요한가 |
 | [docs/2026-07-16-kn-estimator-overview.md](docs/2026-07-16-kn-estimator-overview.md) | 배경·모델·현황·개선 총정리 |
 | [docs/2026-07-20-multi-project-calibration-campaign.md](docs/2026-07-20-multi-project-calibration-campaign.md) | 3개 프로젝트 실측 캠페인(54 run) — 계수 이전성·모드 역전·파일럿 검증 |

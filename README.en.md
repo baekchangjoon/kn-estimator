@@ -152,7 +152,9 @@ kn-calibrate --ledger run_ledger.jsonl --runs runs/ --out my-cal.json
 kn-estimate <root> --calibration my-cal.json --w-soft <re-derived>
 ```
 
-Ledger schema and details: [docs/GUIDE.md](docs/GUIDE.md) §4.4 (Korean).
+Who produces the ledger/transcripts and how (agent prompt template, adapters
+for other agents, recording snippet): **[docs/CALIBRATION.md](docs/CALIBRATION.md)** (Korean).
+Ledger schema summary: [docs/GUIDE.md](docs/GUIDE.md) §4.4 (Korean).
 
 ## Layout
 
@@ -187,6 +189,7 @@ CI (GitHub Actions) on every push and PR.
 | Document | Contents |
 |---|---|
 | [docs/GUIDE.md](docs/GUIDE.md) | How it works, pipeline, CLI, pilot-calibration workflow |
+| [docs/CALIBRATION.md](docs/CALIBRATION.md) | Calibration in practice — who produces the ledger/transcripts, agent prompt template, adapters for other agents |
 | [docs/cost-model-explained.md](docs/cost-model-explained.md) | Why quadratic, why chunking makes it linear, why K matters |
 | [docs/2026-07-16-kn-estimator-overview.md](docs/2026-07-16-kn-estimator-overview.md) | Background, model, status, improvements |
 | [docs/2026-07-20-multi-project-calibration-campaign.md](docs/2026-07-20-multi-project-calibration-campaign.md) | 54-run measurement campaign on 3 projects — coefficient transfer, mode inversion, pilot-loop validation |
