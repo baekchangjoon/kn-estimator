@@ -32,7 +32,9 @@ def load_calibration(path=None):
         p = Path(path)
         # 동봉 번들 이름(petclinic·community·auth-user)도 허용 — 파일 경로가 아니면
         # data/calibration-<이름>.json (기본 번들 이름이면 calibration.json)을 쓴다.
-        if not p.exists() and "/" not in str(path):
+        # 판별은 is_file()이다 — exists()면 cwd의 동명 **디렉터리**(예: petclinic
+        # SUT 클론)가 번들 이름을 가려 read_text에서 IsADirectoryError가 난다.
+        if not p.is_file() and "/" not in str(path):
             bundled = (BUNDLED_CALIBRATION if path == "auth-user"
                        else HERE / f"data/calibration-{path}.json")
             if bundled.exists():
@@ -41,8 +43,8 @@ def load_calibration(path=None):
                 raise SystemExit(
                     f"'{path}'는 파일도 동봉 번들 이름도 아니다 — 동봉 번들: "
                     "auth-user(기본), petclinic, community. 또는 캘리브레이션 파일 경로를 지정하라.")
-        if not p.exists():
-            raise SystemExit(f"--calibration 경로를 찾을 수 없다: {p}")
+        if not p.is_file():
+            raise SystemExit(f"--calibration 경로가 파일이 아니거나 없다: {p}")
     else:
         p = BUNDLED_CALIBRATION
         if not p.exists():

@@ -27,12 +27,10 @@ python3.12 -m venv .venv && .venv/bin/pip install -e '.[test]'
 #   (PYTHONHASHSEED 무관 바이트 일치 — 결정성 검증됨. 주의: 보고서는 `대상:` 줄에
 #    project_root 인자를 그대로 박으므로 **위 명령의 상대경로 그대로** 실행해야
 #    해시가 일치한다. kn-plan.json은 경로 무관.)
-#   ⚠ 후속 과제(2026-07-28): 이상치 감지 도입으로 petclinic w 분포가 중앙값 4배
-#    초과 EP를 포함하면 kn-report.md에 경고 한 줄이 추가돼 위 report 골든이 바뀔
-#    수 있다 — 이번 작업 시점에 로컬 SUT 클론이 없어 미실측. SUT 확보 시 위 명령
-#    재실행으로 골든 재검증·갱신 필요 (수치 요약 N=18 chunks=3 k_avg=6.0
-#    est=$21.18과 kn-plan.json 골든은 이상치 라인과 무관하게 불변이어야 한다).
-.venv/bin/python -m pytest tests/   # SUT 없이 130 passed (SUT·외부 샘플 의존은 skip)
+#   ✓ 이상치 감지 도입 후 재검증 완료(2026-07-29, baekchangjoon/spring-petclinic
+#    비공개 포크 클론 재확보): petclinic w 분포는 중앙값 4배 초과 EP가 없어
+#    이상치 미발동 — 수치 요약·두 골든 해시 모두 도입 전과 완전 일치.
+.venv/bin/python -m pytest tests/   # SUT 없이 135 passed, SUT 있으면 149 passed (외부 샘플 의존만 skip)
 ```
 
 | 자산 | 위치 | 유래 |
