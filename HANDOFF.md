@@ -9,7 +9,7 @@
 ## 1. kn-estimator가 무엇인가
 
 테스트 생성 착수 **전에** 대상 Spring 프로젝트를 정적 스캔(LLM 호출 없음, 수 초)해
-N(엔드포인트 수)·w_i(EP별 작업량)·청크 플랜(FFD)·예상 비용/시간(모드×모델 매트릭스)을
+N(엔드포인트 수)·w_i(EP별 작업량)·청크 플랜(FFD)·예상 비용/시간(셀=라벨×모델 매트릭스)을
 산출. 사용법: `README.md`, 상세: `docs/GUIDE.md`,
 전체 정리: `docs/2026-07-16-kn-estimator-overview.md`.
 
@@ -19,7 +19,7 @@ N(엔드포인트 수)·w_i(EP별 작업량)·청크 플랜(FFD)·예상 비용/
 # SUT: spring-petclinic 포크(비공개) fe8128079e12fd1a47b4c2757a4b51a12fa3adf2 클론을
 # ./petclinic 에 두거나 KN_SUT로 지정
 python3.12 -m venv .venv && .venv/bin/pip install -e '.[test]'
-.venv/bin/kn-estimate petclinic --mode template --model sonnet
+.venv/bin/kn-estimate petclinic --label template --model sonnet
 # → N=18 chunks=3 k_avg=6.0 est=$21.18, petclinic/.kn/{kn-report.md,kn-plan.json}
 #   골든: kn-plan.json sha256 9bb69fd2c8257055…, kn-report.md 87d8f08fc9b64574…
 #   (PYTHONHASHSEED 무관 바이트 일치 — 결정성 검증됨. 주의: 보고서는 `대상:` 줄에

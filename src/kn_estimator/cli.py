@@ -121,7 +121,7 @@ def build_matrix(sls, cal, w_hard, w_soft, parallel=False):   # 인자 순서 = 
         if key not in cal["cells"]:
             matrix[key] = f"insufficient_calibration ({cal['skipped_cells'][key]})"
             continue
-        label, mdl = key.split("/", 1)
+        label, mdl = key.rsplit("/", 1)   # model은 뒤쪽 고정 — 방어적 파싱
         pm = plan_mod.build_plan(sls, cal, label=label, mdl=mdl,
                                  w_hard=w_hard, w_soft=w_soft, parallel=parallel)
         if pm.get("status"):
@@ -164,6 +164,9 @@ def main():
     root = Path(args.project_root)
     if not root.is_dir():
         raise SystemExit(f"프로젝트 경로가 없거나 디렉토리가 아니다: {root}")
+    if "/" in args.label:
+        raise SystemExit(f"라벨에 '/'를 쓸 수 없다 ('{args.label}') — "
+                         "셀 키가 <label>/<model> 형식이라 구분자와 충돌한다.")
     w_soft = 250_000 if args.conservative else args.w_soft
 
     cal = load_calibration(args.calibration)
@@ -191,7 +194,7 @@ def main():
     if p.get("status"):
         why = (cal.get("skipped_cells") or {}).get(f"{args.label}/{args.model}")
         if p["status"] == "insufficient_calibration" and not why:
-            # 원장에 variant 자체가 없던 셀 — 스킵 사유조차 없다. 빈 메시지로 죽지
+            # 원장에 등장하지 않던 셀 — 스킵 사유조차 없다. 빈 메시지로 죽지
             # 않고 미측정 사실과 가용 셀을 알린다.
             why = (f"동봉 캘리브레이션 미측정 셀 — 가용: {', '.join(sorted(cal['cells']))}")
         print(f"{p['status']}: {p.get('reason') or why or ''}")

@@ -116,3 +116,22 @@ def test_model_layer_uses_label_vocabulary():
     cal["cells"]["docs-translate/haiku"] = cal["cells"]["template/haiku"]
     est = model.estimate_cell(cal, "docs-translate", "haiku", [1.0] * 4)
     assert est["cost_usd"] > 0
+
+
+def test_label_with_slash_is_rejected_at_cli(tmp_path, monkeypatch):
+    """셀 키가 <label>/<model>이라 라벨의 '/'는 키 파싱을 오염시킨다 — 입구에서 거부."""
+    root = _project(tmp_path)
+    monkeypatch.setattr(sys, "argv",
+                        ["kn-estimate", root, "--label", "auth/analyze"])
+    with pytest.raises(SystemExit) as e:
+        cli.main()
+    assert "/" in str(e.value) and "라벨" in str(e.value)
+
+
+def test_label_with_slash_is_rejected_in_ledger(tmp_path):
+    row = _write_run(tmp_path, "s-n1-r1", "auth/analyze", "sonnet", 1, 3.0)
+    ledger = tmp_path / "ledger.jsonl"
+    ledger.write_text(json.dumps(row))
+    with pytest.raises(SystemExit) as e:
+        calibrate.calibrate(ledger, tmp_path / "runs")
+    assert "s-n1-r1" in str(e.value) and "/" in str(e.value)
