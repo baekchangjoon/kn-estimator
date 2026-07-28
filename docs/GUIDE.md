@@ -171,10 +171,28 @@ kn-estimate /path/to/your-spring-project \
 # → your-spring-project/.kn/kn-report.md, kn-plan.json
 ```
 
+Spring 스캐너 대신 **대상 목록을 직접 공급**할 수도 있다 (임의 반복 작업 —
+개념·요리책은 `docs/CONCEPTS.md`):
+
+```bash
+kn-estimate --targets targets.txt --label analyze --model sonnet   # 한 줄에 하나
+kn-estimate --targets list.json ...     # [{id, w?, group?}] 정밀형
+kn-estimate --n 100 ...                 # 개수만 (균일 w)
+# 산출물은 cwd/.kn/ — 소스는 project_root·--targets·--n 중 정확히 하나
+```
+
+- 텍스트 목록의 줄 전부가 실존 파일이면 w=파일 크기(bytes/4)·group=디렉터리
+  자동, 아니면 균일 w. stdin(`-`)은 텍스트 전용.
+- 모든 앞단에서 w가 중앙값의 4배를 넘는 대상은 **이상치 경고**(별도 라벨 분리
+  측정 권고)가 리포트·stdout에 붙는다 — 균일 w에선 정의상 발동하지 않는다.
+- 캘리브레이션의 n과 목록의 N은 **같은 단위**로 세어져야 한다(단위 일관성 계약).
+
 ### 4.2 CLI 옵션 전체
 
 | 옵션 | 기본 | 설명 |
 |---|---|---|
+| `--targets` | — | 대상 목록 파일 또는 `-`(stdin, 텍스트 전용). `.json`이면 `[{id, w?, group?}]` |
+| `--n` | — | 목록 없이 개수만 — 균일 w 합성 대상 N개 |
 | `--label` | template | 작업 라벨(자유 문자열) — 셀 이름의 앞 절반. 동봉 캘리브레이션의 라벨: `template`(spec→렌더러 생성 전략) / `flat`(직접 저작 전략) |
 | `--model` | sonnet | opus / sonnet / haiku (미캘리브레이션 셀은 수치 미제공) |
 | `--calibration` | 내장 실측 | calibration.json 경로 (자체 실측으로 교체 가능) |

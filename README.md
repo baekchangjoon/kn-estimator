@@ -66,6 +66,15 @@ python3 -m venv .venv && .venv/bin/pip install -e '.[test]'
 kn-estimate <spring-project-root> --groups
 ```
 
+Spring이 아니거나 임의 반복 작업(클래스 분석, 문서 번역 등)이면 대상 목록을
+직접 공급한다 — 한 줄에 하나 (파일 경로면 크기·디렉터리를 작업량·묶음 힌트로
+자동 사용):
+
+```bash
+find src -name '*Service.java' > targets.txt
+kn-estimate --targets targets.txt --label analyze --groups   # 또는: --n 100
+```
+
 실행 예 (실측 출력):
 
 ```text
@@ -121,6 +130,8 @@ kn-estimate <project_root> [옵션]
 
 | 옵션 | 기본 | 뜻 |
 |---|---|---|
+| `--targets <파일\|->` | — | 대상 목록 직접 공급 (스캐너 대신). 한 줄에 하나; `-`=stdin(텍스트 전용); `.json`은 `[{id, w?, group?}]` 정밀형 |
+| `--n <개수>` | — | 목록 없이 개수만 — 균일 w 합성 대상 N개 (`project_root`·`--targets`·`--n` 중 정확히 하나) |
 | `--label <이름>` | template | 작업 라벨 — 셀 이름의 앞 절반 (자유 문자열; 동봉 캘리브레이션의 라벨: `template`\|`flat`) |
 | `--model opus\|sonnet\|haiku` | sonnet | 대상 모델 (미캘리브레이션 셀은 `insufficient_calibration` 표기) |
 | `--groups` | off | 비용 최적 생성 묶음을 "그룹N(EP, …)" 실행 지시 형태로 출력 |
@@ -184,6 +195,7 @@ SUT(petclinic 포크)·외부 샘플 의존 테스트는 해당 경로가 없으
 
 | 문서 | 내용 |
 |---|---|
+| [docs/CONCEPTS.md](docs/CONCEPTS.md) | 초급자용 개념 가이드 — 앞단/뒷단, 스캐너, w, 라벨·셀, 이상치, 단위별 요리책 |
 | [docs/GUIDE.md](docs/GUIDE.md) | 동작 원리·파이프라인·CLI·파일럿 캘리브레이션 워크플로 |
 | [docs/CALIBRATION.md](docs/CALIBRATION.md) | 캘리브레이션 실전 — 원장·트랜스크립트 생성 주체, 에이전트 지시 템플릿, 타 에이전트 어댑터 |
 | [docs/cost-model-explained.md](docs/cost-model-explained.md) | 왜 2차인가, 청크가 왜 1차로 만드나, K는 왜 중요한가 |
