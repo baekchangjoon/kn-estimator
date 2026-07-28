@@ -124,6 +124,30 @@ absolute tokens — so the absolute cost level comes entirely from the
 calibration coefficients (scaling all w by a constant changes nothing).
 Derivation and measurements: [docs/cost-model-explained.md](docs/cost-model-explained.md) (Korean).
 
+The report's cell (label×model) matrix compares the same task across
+strategies and models on the **cost axis** — the same concern as
+[AI Agents That Matter](https://arxiv.org/abs/2407.01502)'s proposal to
+evaluate and optimize agents jointly on accuracy and cost.
+
+### References
+
+The premise "multi-turn cost is quadratic" is not this project's claim; it is
+backed at distinct layers by published work and official documentation:
+
+| Layer | Statement | Source |
+|---|---|---|
+| Billing structure | Every turn re-processes and re-bills the full conversation prefix (cache hits are re-billed at 0.1×) → cumulative input tokens grow quadratically in turns | [Anthropic prompt caching docs](https://platform.claude.com/docs/en/build-with-claude/prompt-caching) |
+| Serving systems | Multi-turn conversations repeatedly recompute the KV caches of historical tokens, incurring high serving cost — reuse cuts end-to-end inference cost by up to 70% | [CachedAttention, USENIX ATC'24](https://www.usenix.org/conference/atc24/presentation/gao-bin-cost) ([arXiv:2403.19708](https://arxiv.org/abs/2403.19708)) |
+| Compute complexity | Self-attention compute is O(n²) in sequence length | [Attention Is All You Need](https://arxiv.org/abs/1706.03762) |
+| Evaluation methodology | Agents should be evaluated and optimized jointly on accuracy and cost | [AI Agents That Matter](https://arxiv.org/abs/2407.01502) |
+
+Keep the layers apart: the O(n²) of self-attention is about a single forward
+pass, while API billing is linear per token — the quadratic this tool models
+comes from **re-sending the whole history every turn** (the billing layer).
+Prompt caching shrinks the constant but not the structure, since cache reads
+are still billed — the P_cache_read term in the cost model fits that residual
+quadratic term from measurements.
+
 ## CLI options
 
 ```bash

@@ -177,3 +177,24 @@ kn-estimate --targets targets.txt --label analyze --model sonnet \
             --calibration my-cal.json --groups
 # → "그룹1(…), 그룹2(…)로 돌리세요" + 예상 비용/구간
 ```
+
+## 8. 근거 문헌 — "멀티턴 비용은 2차"는 어디서 오는 사실인가
+
+§1의 전제(세션을 이어가면 비용이 N²)는 이 프로젝트의 주장이 아니라, 서로 다른
+층위의 문헌·공식 문서가 각각 뒷받침하는 사실이다:
+
+| 층위 | 내용 | 출처 |
+|---|---|---|
+| 과금 구조 | 매 턴 전체 대화 프리픽스가 입력으로 다시 처리·과금된다 (캐시 히트도 0.1×로 재과금) → 누적 입력 토큰이 턴 수에 2차 | [Anthropic prompt caching 문서](https://platform.claude.com/docs/en/build-with-claude/prompt-caching) |
+| 서빙 시스템 | 멀티턴 대화는 역사 토큰의 KV 캐시를 반복 재계산해 서빙 비용이 높다 — 재사용으로 e2e 추론 비용 최대 70% 절감 | [CachedAttention, USENIX ATC'24](https://www.usenix.org/conference/atc24/presentation/gao-bin-cost) ([arXiv:2403.19708](https://arxiv.org/abs/2403.19708)) |
+| 계산 복잡도 | self-attention 계산량은 시퀀스 길이에 O(n²) | [Attention Is All You Need](https://arxiv.org/abs/1706.03762) |
+| 평가 방법론 | 에이전트는 정확도와 비용을 함께 최적화 대상으로 평가해야 한다 | [AI Agents That Matter](https://arxiv.org/abs/2407.01502) |
+
+읽을 때 층위를 섞지 않는 것이 중요하다:
+
+- 계산 복잡도의 O(n²)는 **한 번의 forward pass** 이야기다. API 과금은 토큰당
+  선형이므로, 이 도구가 다루는 2차는 계산 복잡도가 아니라 **매 턴 히스토리
+  재전송의 누적**(과금 구조 층위)에서 온다.
+- 프롬프트 캐싱을 켜도 2차가 사라지는 게 아니라 **상수가 작아진다** — cache
+  read가 0.1×로 재과금되기 때문이다. §1의 비용 모델에서 P_cache_read 항이 바로
+  그 잔여 2차 항이고, 캘리브레이션이 그 크기를 실측 계수로 적합한다.
