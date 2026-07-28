@@ -66,6 +66,15 @@ python3 -m venv .venv && .venv/bin/pip install -e '.[test]'
 kn-estimate <spring-project-root> --groups
 ```
 
+Not a Spring project, or an arbitrary repetitive task (class analysis, doc
+translation, …)? Supply the target list yourself — one target per line (file
+paths get size/directory used as workload/grouping hints automatically):
+
+```bash
+find src -name '*Service.java' > targets.txt
+kn-estimate --targets targets.txt --label analyze --groups   # or: --n 100
+```
+
 Example (actual output; the group lines are in Korean):
 
 ```text
@@ -123,6 +132,8 @@ kn-estimate <project_root> [options]
 
 | Option | Default | Meaning |
 |---|---|---|
+| `--targets <file\|->` | — | Supply the target list directly (instead of the scanner). One per line; `-` = stdin (text only); `.json` = `[{id, w?, group?}]` precision form |
+| `--n <count>` | — | Count only, no list — N synthetic targets with uniform w (exactly one of `project_root`·`--targets`·`--n`) |
 | `--label <name>` | template | Task label — the first half of the cell name (free string; bundled labels: `template`\|`flat`) |
 | `--model opus\|sonnet\|haiku` | sonnet | Target model (uncalibrated cells are reported as `insufficient_calibration`) |
 | `--groups` | off | Print the cost-optimal batches as runnable "groupN(EP, …)" instructions |
@@ -188,6 +199,7 @@ CI (GitHub Actions) on every push and PR.
 
 | Document | Contents |
 |---|---|
+| [docs/CONCEPTS.md](docs/CONCEPTS.md) | Beginner concept guide — front/back end, scanner, w, labels & cells, outliers, per-unit recipes |
 | [docs/GUIDE.md](docs/GUIDE.md) | How it works, pipeline, CLI, pilot-calibration workflow |
 | [docs/CALIBRATION.md](docs/CALIBRATION.md) | Calibration in practice — who produces the ledger/transcripts, agent prompt template, adapters for other agents |
 | [docs/cost-model-explained.md](docs/cost-model-explained.md) | Why quadratic, why chunking makes it linear, why K matters |

@@ -10,8 +10,10 @@
 
 테스트 생성 착수 **전에** 대상 Spring 프로젝트를 정적 스캔(LLM 호출 없음, 수 초)해
 N(엔드포인트 수)·w_i(EP별 작업량)·청크 플랜(FFD)·예상 비용/시간(셀=라벨×모델 매트릭스)을
-산출. 사용법: `README.md`, 상세: `docs/GUIDE.md`,
-전체 정리: `docs/2026-07-16-kn-estimator-overview.md`.
+산출. **2026-07-28부터 스캐너 없이도 동작한다** — `--targets <파일|->`(임의 대상
+목록)·`--n <개수>`(균일 w) 범용 앞단 + 전 앞단 공통 w 이상치 감지(중앙값 4배 초과
+→ 별도 라벨 분리 측정 권고). 개념 문서: `docs/CONCEPTS.md`. 사용법: `README.md`,
+상세: `docs/GUIDE.md`, 전체 정리: `docs/2026-07-16-kn-estimator-overview.md`.
 
 ## 2. 현행 기준선 (2026-07-27, 검증 완료 스모크)
 
@@ -25,7 +27,12 @@ python3.12 -m venv .venv && .venv/bin/pip install -e '.[test]'
 #   (PYTHONHASHSEED 무관 바이트 일치 — 결정성 검증됨. 주의: 보고서는 `대상:` 줄에
 #    project_root 인자를 그대로 박으므로 **위 명령의 상대경로 그대로** 실행해야
 #    해시가 일치한다. kn-plan.json은 경로 무관.)
-.venv/bin/python -m pytest tests/   # SUT 없이 93 passed, SUT 있으면 106 passed
+#   ⚠ 후속 과제(2026-07-28): 이상치 감지 도입으로 petclinic w 분포가 중앙값 4배
+#    초과 EP를 포함하면 kn-report.md에 경고 한 줄이 추가돼 위 report 골든이 바뀔
+#    수 있다 — 이번 작업 시점에 로컬 SUT 클론이 없어 미실측. SUT 확보 시 위 명령
+#    재실행으로 골든 재검증·갱신 필요 (수치 요약 N=18 chunks=3 k_avg=6.0
+#    est=$21.18과 kn-plan.json 골든은 이상치 라인과 무관하게 불변이어야 한다).
+.venv/bin/python -m pytest tests/   # SUT 없이 130 passed (SUT·외부 샘플 의존은 skip)
 ```
 
 | 자산 | 위치 | 유래 |
@@ -46,6 +53,9 @@ python3.12 -m venv .venv && .venv/bin/pip install -e '.[test]'
 - **2026-07-27** SUT 교체: 동봉 캘리브레이션을 캠페인(auth-user) 실측으로 교체,
   `W_SOFT_DEFAULT` 330K 재산정(현세대 env≈178K가 구 180K 벽을 채우는 F7 퇴화 방지),
   레거시 SUT 원자료 제거·명칭 익명화, 테스트·문서 petclinic 재기준선.
+- **2026-07-28** 범용 앞단: `--targets`/`--n`(스캐너 우회, 임의 단위) + 공통 w
+  이상치 감지, `docs/CONCEPTS.md` 신설 — 뒷단(plan/model) 무수정, REQ-001~013
+  (docs/superpowers/requirements/2026-07-28-targets-frontend-requirements.md).
 
 ## 4. 미결·주의
 
