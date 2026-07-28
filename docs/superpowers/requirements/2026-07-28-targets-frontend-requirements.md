@@ -142,8 +142,8 @@
 | REQ-008 | 소스 상호 배타 | test_req008_both_sources, test_req008_no_source | E2E | 🟢 green |
 | REQ-009 | 입력 검증 | test_req009_duplicate_path_normalized, test_req009_empty_list, test_req009_n_zero, test_req009_missing_file | E2E | 🟢 green |
 | REQ-010 | 이상치 감지 | test_req010_outlier_warning_position, test_req010_no_warning_uniform | E2E | 🟢 green |
-| REQ-011 | 스캐너 회귀 불변 | test_req011_scanner_baseline_unchanged (test_targets_frontend.py에 신설 — test_kn.py 자체 러너는 픽스처 함수에 TypeError라 배치 불가; KN_SUT 존중, SUT 부재 시 skip — CI 허용) | E2E | 🟡 skip (테스트 신설·통과 조건 확정 — 로컬 SUT 클론 미보유로 실측 미실행, HANDOFF §2 후속 과제) |
+| REQ-011 | 스캐너 회귀 불변 | test_req011_scanner_baseline_unchanged (test_targets_frontend.py에 신설 — test_kn.py 자체 러너는 픽스처 함수에 TypeError라 배치 불가; KN_SUT 존중, SUT 부재 시 skip — CI 허용) | E2E | 🟢 green (2026-07-29 SUT 재확보 실측 — 수치 요약·골든 해시 완전 일치, 이상치 미발동) |
 | REQ-012 | 리포트·고지 어휘 | test_req012_report_vocabulary, test_req012_n_source_line, test_req012_file_w_report, test_req012_json_w_report, test_req012_pilot_notice_noun, test_req012_env_wall_noun | E2E | 🟢 green |
 | REQ-013 | 개념 문서·동기화 | test_req013_concepts_doc_linked | integration | 🟢 green |
 
-Coverage: 12/13 green + REQ-011 🟡 skip — target 100% (대상: Must 13건. REQ-011은 SUT 보유 로컬 기준 green 판정인데 이번 작업 시점에 petclinic 비공개 포크 클론을 확보할 수 없어 skip 상태다. 수용 테스트는 작성돼 있고, SUT 확보 시 KN_SUT 지정 실행으로 판정한다 — HANDOFF §2 후속 과제)
+Coverage: 13/13 green (100%) — 대상: Must 13건. REQ-011은 2026-07-29 baekchangjoon/spring-petclinic 클론 재확보 후 실측으로 green 전환 (골든 불변 확인)

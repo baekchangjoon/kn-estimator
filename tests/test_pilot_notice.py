@@ -89,3 +89,17 @@ def test_calibration_accepts_bundled_name(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "N=1" in out
     assert "파일럿" not in out   # 명시 선택이므로 고지 억제
+
+
+def test_bundled_name_not_shadowed_by_local_dir(tmp_path, monkeypatch, capsys):
+    """cwd에 번들 이름과 같은 **디렉터리**(예: petclinic SUT 클론)가 있어도
+    --calibration petclinic 은 동봉 번들로 해석돼야 한다 — exists() 판별이면
+    디렉터리가 경로로 오인돼 IsADirectoryError가 난다 (2026-07-28 실측)."""
+    root = _project(tmp_path)
+    (tmp_path / "petclinic").mkdir()          # 번들 이름을 가리는 디렉터리
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys, "argv",
+                        ["kn-estimate", root, "--calibration", "petclinic"])
+    cli.main()
+    out = capsys.readouterr().out
+    assert "N=1" in out
